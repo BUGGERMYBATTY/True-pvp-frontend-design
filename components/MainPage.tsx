@@ -1,11 +1,3 @@
-// Fix: Commented out invalid frontmatter-style text at the top of the file to resolve parsing errors.
-/*
----
-name: Copy of TRUEPVP.io with PHW INTEG cosmic 
-description: A PVP gaming site where players compete in various games with Solana wagers.
-  Featuring Solana Gold Rush and Neon Pong.
----
-*/
 import React, { useState } from 'react';
 
 // --- SVG Icons for Game Cards ---
@@ -88,23 +80,27 @@ const CosmicDodgeIcon = () => (
     </svg>
 );
 
-
 const QuantumGambitIcon = () => (
-     <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
         <defs>
-            <filter id="purpleGlow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+            <filter id="purpleGlowIcon" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.8 0" result="glowMatrix"/>
                 <feMerge>
-                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="glowMatrix"/>
                     <feMergeNode in="SourceGraphic"/>
                 </feMerge>
             </filter>
+            <g id="knight-sword" strokeLinejoin="round" strokeLinecap="round">
+                <path d="M 47 25 L 53 25 L 53 70 L 47 70 Z" />
+                <path d="M 47 25 L 50 20 L 53 25 Z" />
+                <rect x="38" y="70" width="24" height="6" rx="2" />
+                <rect x="44" y="76" width="12" height="12" rx="2" />
+            </g>
         </defs>
-        <g filter="url(#purpleGlow)" stroke="white" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round">
-            <path d="M 35 78 L 65 78 L 70 85 L 30 85 L 35 78 Z" fill="#C084FC" />
-            <path d="M 40 78 L 40 45 L 60 45 L 60 78" fill="#C084FC" />
-            <path d="M 45 45 C 40 40 42 30 50 25 C 58 30 60 40 55 45 Z" fill="#C084FC" />
-             <path d="M 50 25 C 55 20 65 22 65 15" fill="none" />
+        <g filter="url(#purpleGlowIcon)" fill="#C084FC" stroke="white" strokeWidth="2.5">
+            <use href="#knight-sword" transform="rotate(-30 50 50)" />
+            <use href="#knight-sword" transform="rotate(30 50 50)" />
         </g>
     </svg>
 );
@@ -142,9 +138,6 @@ const games = [
 ];
 
 // --- Collapsible Rules Component ---
-// Fix: Use React.FC and a props interface to correctly type the component.
-// This resolves a TypeScript error where the special 'key' prop, used in lists,
-// was not recognized by the component's inline prop type definition.
 interface CollapsibleRuleProps {
     title: string;
     color: string;
@@ -338,7 +331,7 @@ const MainPage: React.FC<MainPageProps> = ({ onSelectGame, walletConnected }) =>
         <section>
              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
                 <div className="flex flex-col items-center text-center p-6 bg-brand-gray/50 rounded-lg border border-gray-800">
-                    <svg className="w-12 h-12 text-blue-light mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 20.944L12 22l9-1.056a12.02 12.02 0 002.618-15.024z" /></svg>
+                    <svg className="w-12 h-12 text-blue-light mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <h3 className="text-xl font-bold font-display">True Self-Custody</h3>
                     <p className="text-gray-400 mt-2">Your funds never leave your wallet. We never take deposits. All wagers are handled by secure, peer-to-peer transactions directly on the Solana blockchain.</p>
                 </div>
