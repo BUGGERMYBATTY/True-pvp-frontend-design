@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 // Fix: Corrected import path for types
 import { Screen } from '../types';
+// Fix: Corrected import paths to be relative.
 import LobbyScreen from '../components/LobbyScreen.tsx';
 import GameScreen from '../components/GameScreen.tsx';
 import WinnerScreen from '../components/WinnerScreen.tsx';

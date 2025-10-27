@@ -1,3 +1,11 @@
+// Fix: Commented out invalid frontmatter-style text at the top of the file to resolve parsing errors.
+/*
+---
+name: Copy of TRUEPVP.io with PHW INTEG cosmic 
+description: A PVP gaming site where players compete in various games with Solana wagers.
+  Featuring Solana Gold Rush and Neon Pong.
+---
+*/
 import React, { useState } from 'react';
 
 // --- SVG Icons for Game Cards ---
@@ -92,8 +100,11 @@ const QuantumGambitIcon = () => (
                 </feMerge>
             </filter>
         </defs>
-        <g filter="url(#purpleGlow)">
-            <path d="M 50 15 C 40 25 40 40 50 45 C 55 40 70 30 80 25 C 70 20 55 15 50 15 Z M 45 48 C 35 52 30 60 30 70 L 30 80 L 70 80 L 70 75 C 60 75 60 65 55 65 L 50 65 L 50 50 C 48 50 46 49 45 48 Z" fill="#C084FC" stroke="white" strokeWidth="2.5" />
+        <g filter="url(#purpleGlow)" stroke="white" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round">
+            <path d="M 35 78 L 65 78 L 70 85 L 30 85 L 35 78 Z" fill="#C084FC" />
+            <path d="M 40 78 L 40 45 L 60 45 L 60 78" fill="#C084FC" />
+            <path d="M 45 45 C 40 40 42 30 50 25 C 58 30 60 40 55 45 Z" fill="#C084FC" />
+             <path d="M 50 25 C 55 20 65 22 65 15" fill="none" />
         </g>
     </svg>
 );
@@ -327,7 +338,7 @@ const MainPage: React.FC<MainPageProps> = ({ onSelectGame, walletConnected }) =>
         <section>
              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
                 <div className="flex flex-col items-center text-center p-6 bg-brand-gray/50 rounded-lg border border-gray-800">
-                    <svg className="w-12 h-12 text-blue-light mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 6v-1m0-1V4m0 2.01V8m0 0h.01M12 7H8m4 1h4m-4-1v-1m-4 2v-1" /></svg>
+                    <svg className="w-12 h-12 text-blue-light mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 20.944L12 22l9-1.056a12.02 12.02 0 002.618-15.024z" /></svg>
                     <h3 className="text-xl font-bold font-display">True Self-Custody</h3>
                     <p className="text-gray-400 mt-2">Your funds never leave your wallet. We never take deposits. All wagers are handled by secure, peer-to-peer transactions directly on the Solana blockchain.</p>
                 </div>

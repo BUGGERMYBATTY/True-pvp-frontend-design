@@ -10,7 +10,8 @@ interface BettingScreenProps {
   onExitGame: () => void;
   onShowHowToPlay: () => void;
   gameName: string;
-  colorTheme: 'blue' | 'yellow' | 'pink';
+  // Fix: Added 'purple' to support the Chess game theme.
+  colorTheme: 'blue' | 'yellow' | 'pink' | 'purple';
 }
 
 const BettingScreen: React.FC<BettingScreenProps> = ({ 
@@ -57,6 +58,15 @@ const BettingScreen: React.FC<BettingScreenProps> = ({
       text: 'text-pink',
       border: 'border-pink',
       ring: 'focus:ring-pink',
+    },
+    // Fix: Added purple theme for Chess.
+    purple: {
+      main: 'purple',
+      light: 'purple-light',
+      shadow: 'shadow-purple/20',
+      text: 'text-purple',
+      border: 'border-purple',
+      ring: 'focus:ring-purple',
     }
   };
   const theme = colorClasses[colorTheme];

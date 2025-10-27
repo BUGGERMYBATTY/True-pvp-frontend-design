@@ -56,7 +56,7 @@ const App: React.FC = () => {
     setWalletConnected(true);
     setWalletAddress(guestAddress);
     setNickname(guestNick);
-    setBalance(1.0);
+    setBalance(100.0); // DEVELOPER TEST MODE: Increased balance for testing
     setIsDemoMode(true);
     setWalletType('guest');
     playSound('uiClick');

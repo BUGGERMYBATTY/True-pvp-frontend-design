@@ -19,23 +19,26 @@ const WalletIcon = () => (
     </svg>
 );
 const UserIcon = () => (
-    <div className="h-8 w-8 rounded-full bg-brand-dark flex items-center justify-center">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-        </svg>
-    </div>
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+    </svg>
 );
 const GuestIcon = () => (
-    <div className="h-8 w-8 rounded-full bg-brand-dark flex items-center justify-center">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" opacity="0.4" />
-        </svg>
-    </div>
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
 );
 const DisconnectIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+    </svg>
+);
+const SolanaIcon = () => (
+    <svg width="12" height="12" viewBox="0 0 110 101" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block mr-1.5">
+        <path d="M54.8333 0L0 31.6667L54.8333 63.3333L109.667 31.6667L54.8333 0Z" fill="#14F195"/>
+        <path d="M54.8333 101L0 69.3333V37.6667L54.8333 69.3333V101Z" fill="#14F195"/>
+        <path d="M109.667 69.3333L54.8333 101V69.3333L109.667 37.6667V69.3333Z" fill="#14F195" fillOpacity="0.5"/>
+        <path d="M0 37.6667V69.3333L54.8333 101V69.3333L0 37.6667Z" fill="#14F195" fillOpacity="0.5"/>
     </svg>
 );
 
@@ -62,17 +65,22 @@ const Wallet: React.FC<WalletProps> = ({ connected, address, nickname, balance, 
   }
 
   return (
-    <div className="flex items-center gap-3 bg-brand-gray/70 p-1.5 pr-3 rounded-full border border-gray-700">
+    <div className="flex items-center gap-3 bg-brand-gray p-2 rounded-lg border border-gray-700">
         <div className="flex items-center gap-2">
-            {isDemoMode ? <GuestIcon /> : <UserIcon />}
+            <div className="text-gray-400">
+                {isDemoMode ? <GuestIcon /> : <UserIcon />}
+            </div>
             <div>
                 <p className="font-bold text-white text-sm leading-tight">{nickname || `${address.substring(0, 4)}...${address.substring(address.length - 4)}`}</p>
-                <p className="font-mono text-xs text-yellow-light leading-tight">{balance.toFixed(4)} SOL</p>
+                <p className="font-mono text-xs text-gray-300 leading-tight flex items-center">
+                    <SolanaIcon />
+                    {balance.toFixed(4)} SOL
+                </p>
             </div>
         </div>
         <button 
             onClick={onDisconnect}
-            className="bg-gray-700/50 text-gray-400 rounded-full p-2 hover:bg-pink hover:text-white transition-colors"
+            className="text-gray-500 rounded-full p-1 hover:bg-brand-dark hover:text-pink transition-colors"
             aria-label={isDemoMode ? "Exit Demo" : "Disconnect"}
         >
             <DisconnectIcon />
