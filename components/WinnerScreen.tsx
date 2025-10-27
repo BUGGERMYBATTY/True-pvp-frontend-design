@@ -74,6 +74,56 @@ const StarburstAnimation = () => (
     </div>
 );
 
+const QuantumGambitAnimation = () => (
+    <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none">
+      <div className="text-purple-light text-[12rem] opacity-0 animate-[king-glow_2s_ease-out_forwards]" style={{ textShadow: '0 0 20px #A855F7' }}>
+        ♔
+      </div>
+      <style>{`
+        @keyframes king-glow {
+          0% { transform: scale(0.5); opacity: 0; }
+          50% { opacity: 0.3; }
+          100% { transform: scale(1.2); opacity: 0; }
+        }
+      `}</style>
+    </div>
+);
+
+const ConfettiAnimation = () => {
+  const colors = ['#FFD700', '#7DF9FF', '#FF7ED4', '#FFFFFF', '#00BFFF'];
+  return (
+    <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+      {Array.from({ length: 150 }).map((_, i) => (
+        <div
+          key={i}
+          className="absolute animate-[confetti-fall_5s_linear_infinite]"
+          style={{
+            left: `${Math.random() * 100}vw`,
+            top: '-10%',
+            width: `${Math.random() * 10 + 5}px`,
+            height: `${Math.random() * 6 + 5}px`,
+            backgroundColor: colors[Math.floor(Math.random() * colors.length)],
+            animationDelay: `${Math.random() * 5}s`,
+            opacity: Math.random() * 0.7 + 0.3,
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes confetti-fall {
+          0% {
+            transform: translateY(-10vh) rotate(0deg);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(110vh) rotate(720deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 
 interface WinnerScreenProps {
   winnerId: number | null;
@@ -81,7 +131,7 @@ interface WinnerScreenProps {
   onPlayAgain: () => void;
   onExitGame: () => void;
   forfeited?: boolean;
-  gameId: 'solana-gold-rush' | 'neon-pong' | 'cosmic-dodge';
+  gameId: 'solana-gold-rush' | 'neon-pong' | 'cosmic-dodge' | 'chess';
 }
 
 const WinnerScreen: React.FC<WinnerScreenProps> = ({ winnerId, betAmount, onPlayAgain, onExitGame, forfeited, gameId }) => {
@@ -146,6 +196,7 @@ const WinnerScreen: React.FC<WinnerScreenProps> = ({ winnerId, betAmount, onPlay
       case 'solana-gold-rush': return <GoldNuggetAnimation />;
       case 'neon-pong': return <PongPaddleAnimation />;
       case 'cosmic-dodge': return <StarburstAnimation />;
+      case 'chess': return <QuantumGambitAnimation />;
       default: return null;
     }
   };
@@ -153,6 +204,7 @@ const WinnerScreen: React.FC<WinnerScreenProps> = ({ winnerId, betAmount, onPlay
   return (
     <div className="flex flex-col items-center justify-center bg-brand-gray p-10 rounded-xl shadow-2xl shadow-blue/10 animate-fadeIn w-full max-w-lg text-center relative overflow-hidden">
       {renderWinningAnimation()}
+      {isPlayerWinner && <ConfettiAnimation />}
       <div className="relative z-10">
         <div className="text-6xl mb-4">{emoji}</div>
         <h2 className={`text-5xl font-extrabold font-display ${titleColor} mb-4`}>{title}</h2>

@@ -1,410 +1,150 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import Wallet from './components/Wallet.tsx';
-import MainPage from './components/MainPage.tsx';
-import SolanaGoldRush from './games/SolanaGoldRush.tsx';
-import NeonPong from './games/NeonPong.tsx';
-import ViperPit from './games/ViperPit.tsx';
-import { toggleMute, getMuteState, playSound } from './utils/audio.ts';
-
-
-const GAME_TITLES: { [key: string]: string } = {
-  'solana-gold-rush': 'Gold Rush',
-  'neon-pong': 'Neon Pong',
-  'cosmic-dodge': 'Cosmic Dodge',
-};
-
-// Use the standard VITE_ variable name for environment variables
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
-
-// --- Sound Icons ---
-const SoundOnIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-    </svg>
-);
-const SoundOffIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2" />
-    </svg>
-);
-
-
-// --- Modal Components ---
-const DisclaimerModal = ({ onConfirm, checked, onCheckChange }: { onConfirm: () => void; checked: boolean; onCheckChange: (isChecked: boolean) => void; }) => (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
-        <div className="bg-brand-dark p-8 rounded-xl shadow-2xl w-full max-w-md mx-4 border-2 border-yellow relative text-center">
-            <h2 className="text-3xl font-bold font-display mb-4 text-yellow">Important Notice</h2>
-            <p className="text-gray-300 text-lg leading-relaxed mb-2">
-                This is a self-custody platform. Your funds are never deposited on the site and remain in your own wallet at all times. All wagers are peer-to-peer transactions on the Solana blockchain.
-            </p>
-             <div className="flex items-center justify-center mt-6 mb-6">
-                <input
-                    id="dont-show-again"
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) => onCheckChange(e.target.checked)}
-                    className="h-5 w-5 rounded bg-brand-gray border-gray-500 text-yellow focus:ring-yellow cursor-pointer"
-                />
-                <label htmlFor="dont-show-again" className="ml-3 text-gray-300 cursor-pointer">
-                    Acknowledge and don't show again.
-                </label>
-            </div>
-            <div className="flex justify-center">
-                <button onClick={onConfirm} className="bg-yellow text-brand-dark font-bold py-3 px-8 rounded-lg text-lg hover:bg-yellow-light transition-transform transform hover:scale-105 shadow-md">
-                    I Understand, Continue
-                </button>
-            </div>
-        </div>
-    </div>
-);
-
-const NicknameModal = ({ onSubmit }: { onSubmit: (name: string) => void; }) => {
-    const [name, setName] = useState('');
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (name.trim()) {
-          onSubmit(name.trim());
-        }
-    };
-    return (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
-            <form onSubmit={handleSubmit} className="bg-brand-dark p-8 rounded-xl shadow-2xl w-full max-w-md mx-4 border-2 border-blue relative text-center">
-                <h2 className="text-3xl font-bold font-display mb-2 text-blue">Create Your Nickname</h2>
-                <p className="text-gray-400 mb-6">Choose a permanent nickname for your wallet. This cannot be changed later.</p>
-                <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-brand-gray border border-gray-600 rounded-md p-3 text-white text-center text-lg focus:outline-none focus:ring-2 focus:ring-blue mb-4"
-                    placeholder="Enter your nickname"
-                    maxLength={16}
-                    required
-                    autoFocus
-                />
-                <button type="submit" className="w-full bg-blue text-brand-dark font-bold py-3 rounded-lg text-lg hover:bg-blue-light transition-transform transform hover:scale-105 shadow-md">
-                    Set Nickname
-                </button>
-            </form>
-        </div>
-    );
-};
-
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import Wallet from './components/Wallet';
+import MainPage from './components/MainPage';
+import SolanaGoldRush from './games/SolanaGoldRush';
+import NeonPong from './games/NeonPong';
+import ViperPit from './games/ViperPit'; // This is for Cosmic Dodge
+import Chess from './games/Chess';
+import { playSound, toggleMute, getMuteState } from './utils/audio';
 
 const App: React.FC = () => {
+  // State Management
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [walletAddress, setWalletAddress] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [balance, setBalance] = useState(0.0);
   const [currentGame, setCurrentGame] = useState<string | null>(null);
-  const [walletConnected, setWalletConnected] = useState<boolean>(false);
-  const [walletAddress, setWalletAddress] = useState<string>('');
-  const [nickname, setNickname] = useState<string>('');
-  const [balance, setBalance] = useState<number>(0);
-  const [provider, setProvider] = useState<any | null>(null);
-  const [connection, setConnection] = useState<any | null>(null);
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
-  const [showDisclaimer, setShowDisclaimer] = useState<boolean>(false);
-  const [showNicknameModal, setShowNicknameModal] = useState<boolean>(false);
-  const [dontShowDisclaimerAgain, setDontShowDisclaimerAgain] = useState<boolean>(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [walletType, setWalletType] = useState<'guest' | 'phantom' | null>(null);
   const [isMuted, setIsMuted] = useState(getMuteState());
-  
-  const handleToggleMute = () => {
-      setIsMuted(toggleMute());
+
+  // --- Mock Wallet Logic ---
+  const refetchBalance = useCallback(() => {
+    if (walletConnected) {
+      console.log('Balance refetched.');
+    }
+  }, [walletConnected]);
+
+  const handleConnect = () => {
+    const mockAddress = 'SoL...dE7';
+    const mockNick = 'SolanaPlayer';
+    setWalletConnected(true);
+    setWalletAddress(mockAddress);
+    setNickname(mockNick);
+    setBalance(2.5);
+    setIsDemoMode(false);
+    setWalletType('phantom');
+    playSound('uiClick');
+  };
+
+  const handleDisconnect = () => {
+    setWalletConnected(false);
+    setWalletAddress('');
+    setNickname('');
+    setBalance(0);
+    setIsDemoMode(false);
+    setWalletType(null);
+    if (currentGame) {
+        setCurrentGame(null);
+    }
+    playSound('uiClick');
   };
   
-  useEffect(() => {
-    if ("solana" in window) {
-      const solanaProvider = (window as any).solana;
-      if (solanaProvider.isPhantom) {
-        setProvider(solanaProvider);
-
-        if (!connection) {
-          const conn = new (window as any).solanaWeb3.Connection(
-            (window as any).solanaWeb3.clusterApiUrl('devnet'),
-            'confirmed'
-          );
-          setConnection(conn);
-          return;
-        }
-
-        const handleConnect = async (publicKey: any) => {
-          const address = publicKey.toString();
-          setWalletAddress(address);
-          setWalletConnected(true);
-          setIsDemoMode(false);
-          const balance = await connection.getBalance(publicKey);
-          setBalance(balance / (window as any).solanaWeb3.LAMPORTS_PER_SOL);
-          
-          const storedNicknames = JSON.parse(localStorage.getItem('userNicknames') || '{}');
-          if (storedNicknames[address]) {
-            setNickname(storedNicknames[address]);
-          } else {
-            setShowNicknameModal(true);
-          }
-        };
-
-        const handleDisconnect = () => {
-          if (!isDemoMode) {
-            setWalletConnected(false);
-            setWalletAddress('');
-            setNickname('');
-            setBalance(0);
-            setCurrentGame(null);
-          }
-        };
-        
-        solanaProvider.on('connect', handleConnect);
-        solanaProvider.on('disconnect', handleDisconnect);
-        
-        return () => {
-          solanaProvider.removeListener('connect', handleConnect);
-          solanaProvider.removeListener('disconnect', handleDisconnect);
-        }
-      }
-    }
-  }, [connection, isDemoMode]);
-
-  const connectWalletAction = useCallback(async () => {
-    if (!provider) return;
-    try {
-        await provider.connect({ onlyIfTrusted: false });
-    } catch (err) {
-        console.error("User rejected the connection request:", err);
-    }
-  }, [provider]);
-
-  const handleConnectWallet = useCallback(() => {
-    playSound('uiClick');
-    if (!provider) {
-      alert('Phantom wallet not found. Please install the Phantom browser extension.');
-      return;
-    }
-
-    const hasAcknowledgedPermanently = localStorage.getItem('disclaimerAcknowledged') === 'true';
-    if (hasAcknowledgedPermanently) {
-      connectWalletAction();
-      return;
-    }
-
-    const hasAcknowledgedSession = sessionStorage.getItem('disclaimerAcknowledged') === 'true';
-    if (hasAcknowledgedSession) {
-      connectWalletAction();
-      return;
-    }
-    
-    setShowDisclaimer(true);
-  }, [provider, connectWalletAction]);
-  
-  const handleDisclaimerConfirm = useCallback(async () => {
-    playSound('uiClick');
-    setShowDisclaimer(false);
-    sessionStorage.setItem('disclaimerAcknowledged', 'true');
-
-    if (dontShowDisclaimerAgain) {
-      localStorage.setItem('disclaimerAcknowledged', 'true');
-    }
-    
-    connectWalletAction();
-  }, [dontShowDisclaimerAgain, connectWalletAction]);
-
-  const handleDisconnectWallet = useCallback(async () => {
-    playSound('uiClick');
-    if (isDemoMode) {
-      setWalletConnected(false);
-      setWalletAddress('');
-      setNickname('');
-      setBalance(0);
-      setIsDemoMode(false);
-      setCurrentGame(null);
-      return;
-    }
-    
-    if (provider && provider.isConnected) {
-      try {
-        await provider.disconnect();
-      } catch (err) {
-        console.error("Error during wallet disconnection:", err);
-      }
-    }
-  }, [provider, isDemoMode]);
-
-  const handlePlayAsGuest = useCallback(() => {
-    playSound('uiClick');
-    let guestId = sessionStorage.getItem('guestId');
-    if (!guestId) {
-      guestId = `GUEST_${Math.random().toString(36).substring(2, 10)}`;
-      sessionStorage.setItem('guestId', guestId);
-    }
-
-    setIsDemoMode(true);
+  const handlePlayAsGuest = () => {
+    const guestAddress = `guest_${Math.random().toString(36).substring(2, 10)}`;
+    const guestNick = `Guest_${guestAddress.slice(6, 10)}`;
     setWalletConnected(true);
-    setWalletAddress(guestId);
-    setNickname('Guest');
-    setBalance(10);
-  }, []);
-
-  const handleSetNickname = useCallback((newNickname: string) => {
+    setWalletAddress(guestAddress);
+    setNickname(guestNick);
+    setBalance(1.0);
+    setIsDemoMode(true);
+    setWalletType('guest');
     playSound('uiClick');
-    if (walletAddress) {
-        const storedNicknames = JSON.parse(localStorage.getItem('userNicknames') || '{}');
-        storedNicknames[walletAddress] = newNickname;
-        localStorage.setItem('userNicknames', JSON.stringify(storedNicknames));
-        setNickname(newNickname);
-        setShowNicknameModal(false);
-    }
-  }, [walletAddress]);
-  
-  const refetchBalance = useCallback(async () => {
-    if (walletAddress && connection && !isDemoMode) {
-        try {
-          const publicKey = new (window as any).solanaWeb3.PublicKey(walletAddress);
-          const balance = await connection.getBalance(publicKey);
-          setBalance(balance / (window as any).solanaWeb3.LAMPORTS_PER_SOL);
-        } catch (error) {
-          console.error("Failed to refetch balance:", error);
-        }
-    }
-  }, [walletAddress, connection, isDemoMode]);
+  };
 
-  const handleSelectGame = useCallback((gameId: string) => {
-    playSound('uiClick');
-    setCurrentGame(gameId);
-  }, []);
+  // --- Game Selection Logic ---
+  const handleSelectGame = (game: string) => {
+    if (walletConnected) {
+        playSound('uiClick');
+        setCurrentGame(game);
+    } else {
+        alert('Please connect your wallet or play as a guest to start a game.');
+    }
+  };
 
-  const handleExitGame = useCallback(() => {
+  const handleExitGame = () => {
     playSound('uiClick');
     setCurrentGame(null);
-  }, []);
+    refetchBalance();
+  };
 
-  const handleRequestMatch = useCallback(async (gameId: string, betAmount: number): Promise<{ matched: boolean; gameId: string | null } | null> => {
-    if (!walletConnected) {
-        console.error("Wallet not connected, cannot start match.");
-        return null;
-    }
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/matchmaking/join`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gameId, betAmount, walletAddress, nickname }),
-        });
-        if (!response.ok) {
-           throw new Error(`Server responded with status: ${response.status}`);
-        }
-        const data = await response.json();
-        return { matched: data.matched, gameId: data.gameId || null };
-    } catch (error) {
-        console.error("Error requesting match:", error);
-        alert("Could not connect to the matchmaking server. Please try again later.");
-        return null; 
-    }
-  }, [walletAddress, walletConnected, nickname]);
-
-  const handleCancelMatch = useCallback(async (gameId: string, betAmount: number) => {
-    playSound('uiClick');
-    try {
-        await fetch(`${API_BASE_URL}/api/matchmaking/cancel`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gameId, betAmount, walletAddress }),
-        });
-    } catch (error) {
-        console.error("Error cancelling match:", error);
-    }
-  }, [walletAddress]);
-
-  const getHeaderStyle = (game: string | null): string => {
-    if (!game) {
-      return 'bg-gradient-to-r from-pink-light via-blue-light to-yellow-light bg-clip-text text-transparent animate-psychedelic-bg bg-[size:400%_400%]';
-    }
-    if (game === 'solana-gold-rush') {
-      return 'text-yellow';
-    }
-    if (game === 'neon-pong') {
-      return 'text-blue';
-    }
-     if (game === 'cosmic-dodge') {
-      return 'text-pink';
-    }
-    return 'text-blue';
+  // --- Audio ---
+  const handleMuteToggle = () => {
+      const muted = toggleMute();
+      setIsMuted(muted);
   }
 
+  // --- Render Logic ---
+  const renderGame = () => {
+    const gameProps = {
+        walletAddress,
+        nickname,
+        balance,
+        onExitGame: handleExitGame,
+        refetchBalance,
+        isDemoMode,
+        walletType: walletType!,
+    };
+    switch (currentGame) {
+      case 'solana-gold-rush': return <SolanaGoldRush {...gameProps} />;
+      case 'neon-pong': return <NeonPong {...gameProps} />;
+      case 'cosmic-dodge': return <ViperPit {...gameProps} />;
+      case 'chess': return <Chess {...gameProps} />;
+      default: return null;
+    }
+  };
+
   return (
-    <main className="min-h-screen text-white font-sans flex flex-col items-center p-4">
-      {showDisclaimer && <DisclaimerModal onConfirm={handleDisclaimerConfirm} checked={dontShowDisclaimerAgain} onCheckChange={setDontShowDisclaimerAgain} />}
-      {showNicknameModal && <NicknameModal onSubmit={handleSetNickname} />}
-      <header className="w-full max-w-6xl mx-auto p-4 flex justify-between items-center border-b border-blue/20">
-        <div>
-          {currentGame ? (
-            <h1 className={`text-3xl font-bold font-display tracking-wider ${getHeaderStyle(currentGame)}`}>
-              {GAME_TITLES[currentGame]}
-            </h1>
-          ) : (
-            <img src="/my-new-logo.svg" alt="TRUEPVP.io Logo" className="h-14" />
-          )}
-        </div>
-        <div className="flex items-center gap-4">
-            <button onClick={handleToggleMute} className="text-gray-400 hover:text-white transition-colors" aria-label="Toggle sound">
-                {isMuted ? <SoundOffIcon /> : <SoundOnIcon />}
-            </button>
-            <Wallet
-              connected={walletConnected}
-              address={walletAddress}
-              nickname={nickname}
-              balance={balance}
-              onConnect={handleConnectWallet}
-              onDisconnect={handleDisconnectWallet}
-              isDemoMode={isDemoMode}
-              onPlayAsGuest={handlePlayAsGuest}
-            />
-        </div>
+    <div className="bg-brand-dark min-h-screen text-white font-sans">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-brand-dark/80 backdrop-blur-sm border-b border-gray-800">
+        <nav className="container mx-auto flex justify-between items-center p-4">
+          <div className="font-display font-bold text-2xl tracking-wider">
+            <span className="text-blue">SOL</span><span className="text-pink">PLAY</span>
+          </div>
+          <div className="flex items-center gap-4">
+              <Wallet
+                connected={walletConnected}
+                address={walletAddress}
+                nickname={nickname}
+                balance={balance}
+                onConnect={handleConnect}
+                onDisconnect={handleDisconnect}
+                isDemoMode={isDemoMode}
+                onPlayAsGuest={handlePlayAsGuest}
+              />
+              <button onClick={handleMuteToggle} className="text-gray-400 hover:text-white transition-colors">
+                  {isMuted ? '🔇' : '🔊'}
+              </button>
+          </div>
+        </nav>
       </header>
-      <div className="w-full max-w-5xl flex items-center justify-center mt-8 px-4">
-        {!currentGame && <MainPage onSelectGame={handleSelectGame} />}
-
-        {currentGame === 'solana-gold-rush' && (
-          <SolanaGoldRush 
-            walletAddress={walletAddress}
-            nickname={nickname}
-            balance={balance}
-            onExitGame={handleExitGame}
-            onRequestMatch={handleRequestMatch}
-            onCancelMatch={handleCancelMatch}
-            provider={provider}
-            connection={connection}
-            refetchBalance={refetchBalance}
-            isDemoMode={isDemoMode}
-          />
+      
+      <div className="container mx-auto pt-20">
+        {currentGame ? (
+           <main className="flex flex-col items-center justify-center pt-4">
+              {renderGame()}
+           </main>
+        ) : (
+          <main>
+            <MainPage onSelectGame={handleSelectGame} walletConnected={walletConnected} />
+          </main>
         )}
-
-        {currentGame === 'neon-pong' && (
-          <NeonPong 
-            walletAddress={walletAddress}
-            nickname={nickname}
-            balance={balance}
-            onExitGame={handleExitGame}
-            onRequestMatch={handleRequestMatch}
-            onCancelMatch={handleCancelMatch}
-            provider={provider}
-            connection={connection}
-            refetchBalance={refetchBalance}
-            isDemoMode={isDemoMode}
-          />
-        )}
-
-        {currentGame === 'cosmic-dodge' && (
-          <ViperPit 
-            walletAddress={walletAddress}
-            nickname={nickname}
-            balance={balance}
-            onExitGame={handleExitGame}
-            onRequestMatch={handleRequestMatch}
-            onCancelMatch={handleCancelMatch}
-            provider={provider}
-            connection={connection}
-            refetchBalance={refetchBalance}
-            isDemoMode={isDemoMode}
-          />
-        )}
-
       </div>
-    </main>
+
+       <footer className="text-center py-8 text-gray-500">
+            <p>&copy; {new Date().getFullYear()} SolPlay. A fictional gaming platform for demonstration purposes.</p>
+       </footer>
+    </div>
   );
 };
 

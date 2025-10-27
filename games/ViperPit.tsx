@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Screen, BET_AMOUNTS } from '../types.ts';
-import BettingScreen from '../components/BettingScreen.tsx';
-import MatchingScreen from '../components/MatchingScreen.tsx';
+// Fix: Corrected import path for types
+import { Screen } from '../types';
+import LobbyScreen from '../components/LobbyScreen.tsx';
 import ViperPitGameScreen from '../components/ViperPitGameScreen.tsx';
 import WinnerScreen from '../components/WinnerScreen.tsx';
 import HowToPlayModal from '../components/HowToPlayModal.tsx';
@@ -14,12 +14,9 @@ interface ViperPitProps {
   nickname: string;
   balance: number;
   onExitGame: () => void;
-  onRequestMatch: (gameId: string, betAmount: number) => Promise<{ matched: boolean; gameId: string | null } | null>;
-  onCancelMatch: (gameId: string, betAmount: number) => void;
   refetchBalance: () => void;
-  provider: any;
-  connection: any;
   isDemoMode: boolean;
+  walletType: 'guest' | 'phantom';
 }
 
 const ViperPit: React.FC<ViperPitProps> = ({
@@ -27,47 +24,55 @@ const ViperPit: React.FC<ViperPitProps> = ({
   nickname,
   balance,
   onExitGame,
-  onRequestMatch,
-  onCancelMatch,
   refetchBalance,
+  walletType,
 }) => {
-  const [screen, setScreen] = useState<Screen>(Screen.Betting);
-  const [betAmount, setBetAmount] = useState<number>(BET_AMOUNTS[0]);
+  const [screen, setScreen] = useState<Screen>(Screen.Lobby);
+  const [betAmount, setBetAmount] = useState<number>(0);
   const [gameResult, setGameResult] = useState<{ winnerId: number | null, forfeited: boolean }>({ winnerId: null, forfeited: false });
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [gameId, setGameId] = useState<string | null>(null);
-  const walletConnected = !!walletAddress;
+  const [lobbyId, setLobbyId] = useState<string | null>(null);
 
-  const handleFindOpponent = useCallback(async (amount: number) => {
-    if (!walletConnected || balance < amount) return;
-    setBetAmount(amount);
-    setScreen(Screen.Matching);
-    const matchResult = await onRequestMatch('cosmic-dodge', amount);
-    if (matchResult?.matched && matchResult.gameId) {
-      playSound('matchFound');
-      setGameId(matchResult.gameId);
-      setScreen(Screen.Game);
-    } else if (matchResult === null) {
-      setScreen(Screen.Betting);
-    }
-  }, [walletConnected, balance, onRequestMatch]);
+  const handleLobbyCreated = (createdLobbyId: string, wager: number) => {
+    setLobbyId(createdLobbyId);
+    setBetAmount(wager);
+  };
 
+  const handleLobbyJoined = (joinedGameId: string, wager: number) => {
+    playSound('matchFound');
+    setGameId(joinedGameId);
+    setLobbyId(null);
+    setBetAmount(wager);
+    setScreen(Screen.Game);
+  };
+  
   useEffect(() => {
-    if (screen !== Screen.Matching || gameId) return;
+    if (screen !== Screen.Lobby || !lobbyId) return;
     const intervalId = setInterval(async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/matchmaking/status/${walletAddress}`);
+        const response = await fetch(`${API_BASE_URL}/api/lobbies/status/${lobbyId}`);
         const data = await response.json();
         if (data.status === 'matched' && data.gameId) {
           clearInterval(intervalId);
-          playSound('matchFound');
-          setGameId(data.gameId);
-          setScreen(Screen.Game);
+          handleLobbyJoined(data.gameId, betAmount);
         }
-      } catch (error) { console.error("Error polling for match status:", error); }
+      } catch (error) { console.error("Error polling for lobby status:", error); }
     }, 2000);
     return () => clearInterval(intervalId);
-  }, [screen, walletAddress, gameId]);
+  }, [screen, lobbyId, betAmount]);
+
+  const handleCancelLobby = useCallback(async () => {
+    if (!lobbyId) return;
+    try {
+        await fetch(`${API_BASE_URL}/api/lobbies/cancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lobbyId, walletType }),
+        });
+    } catch (err) { console.error("Failed to cancel lobby:", err); }
+    setLobbyId(null);
+  }, [lobbyId, walletType]);
   
   const handleGameOver = useCallback((winnerId: number | null, forfeited = false) => {
     setGameResult({ winnerId, forfeited });
@@ -79,29 +84,18 @@ const ViperPit: React.FC<ViperPitProps> = ({
     playSound('uiClick');
     setGameResult({ winnerId: null, forfeited: false });
     setGameId(null);
-    setScreen(Screen.Betting);
+    setLobbyId(null);
+    setScreen(Screen.Lobby);
   }, []);
   
   const handleExit = useCallback(() => {
     refetchBalance();
+    if (lobbyId) handleCancelLobby();
     onExitGame();
-  }, [refetchBalance, onExitGame]);
-
-  const handleCancelSearch = useCallback(() => {
-    onCancelMatch('cosmic-dodge', betAmount);
-    setScreen(Screen.Betting);
-  }, [betAmount, onCancelMatch]);
+  }, [refetchBalance, onExitGame, lobbyId, handleCancelLobby]);
 
   const renderScreen = () => {
     switch (screen) {
-      case Screen.Matching:
-        return (
-          <MatchingScreen
-            betAmount={betAmount}
-            onCancelSearch={handleCancelSearch}
-            colorTheme="pink"
-          />
-        );
       case Screen.Game:
         if (!gameId) return <div className="text-center text-xl text-red-500">Error: No Game ID. Please return to lobby.</div>;
         return (
@@ -125,12 +119,35 @@ const ViperPit: React.FC<ViperPitProps> = ({
           />
         );
       default:
-        return <BettingScreen onFindOpponent={handleFindOpponent} walletConnected={walletConnected} balance={balance} onExitGame={onExitGame} onShowHowToPlay={() => setShowHowToPlay(true)} gameName="Cosmic Dodge" colorTheme="pink" />;
+         if (lobbyId) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full animate-fadeIn text-center w-full max-w-md">
+                  <h2 className="text-4xl font-bold font-display text-pink mb-4">Waiting for Opponent...</h2>
+                  <p className="text-white text-lg mb-6">Your {betAmount.toFixed(4)} SOL lobby is open.</p>
+                  <div className="w-20 h-20 border-4 border-dashed rounded-full animate-spin border-pink mb-8"></div>
+                  <button onClick={handleCancelLobby} className="w-full bg-pink text-brand-dark font-bold py-3 px-8 rounded-lg text-xl hover:bg-pink-light">Cancel</button>
+                </div>
+            )
+        }
+        return (
+            <LobbyScreen
+                gameType="cosmic-dodge"
+                onLobbyCreated={handleLobbyCreated}
+                onLobbyJoined={handleLobbyJoined}
+                onExitGame={onExitGame}
+                onShowHowToPlay={() => setShowHowToPlay(true)}
+                walletAddress={walletAddress}
+                nickname={nickname}
+                balance={balance}
+                walletType={walletType}
+                colorTheme="pink"
+            />
+        );
     }
   };
 
   return (
-    <div className="w-full max-w-4xl h-[650px] flex items-center justify-center border-2 border-pink/50 bg-black/20 rounded-lg shadow-2xl p-4 shadow-pink/10 animate-fadeIn relative">
+    <div className="w-full h-[700px] flex items-center justify-center border-2 border-pink/50 bg-black/20 rounded-lg shadow-2xl p-4 shadow-pink/10 animate-fadeIn relative">
       {renderScreen()}
       {showHowToPlay && (
         <HowToPlayModal title="How to Play: Cosmic Dodge" onClose={() => setShowHowToPlay(false)} borderColorClass="border-pink">

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { BET_AMOUNTS } from '../types.ts';
+// Fix: Corrected import path for types
+import { BET_AMOUNTS } from '../types';
 import { playSound } from '../utils/audio.ts';
 
 interface BettingScreenProps {
