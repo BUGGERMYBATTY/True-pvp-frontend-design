@@ -5,6 +5,7 @@ import MatchingScreen from '../components/MatchingScreen.tsx';
 import GameScreen from '../components/GameScreen.tsx';
 import WinnerScreen from '../components/WinnerScreen.tsx';
 import HowToPlayModal from '../components/HowToPlayModal.tsx';
+import { playSound } from '../utils/audio.ts';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -42,6 +43,7 @@ const SolanaGoldRush: React.FC<SolanaGoldRushProps> = ({
     setScreen(Screen.Matching);
     const matchResult = await onRequestMatch('solana-gold-rush', amount);
     if (matchResult?.matched && matchResult.gameId) {
+      playSound('matchFound');
       setGameId(matchResult.gameId);
       setScreen(Screen.Game);
     } else if (matchResult === null) {
@@ -58,6 +60,7 @@ const SolanaGoldRush: React.FC<SolanaGoldRushProps> = ({
         const data = await response.json();
         if (data.status === 'matched' && data.gameId) {
           clearInterval(intervalId);
+          playSound('matchFound');
           setGameId(data.gameId);
           setScreen(Screen.Game);
         }
@@ -75,6 +78,7 @@ const SolanaGoldRush: React.FC<SolanaGoldRushProps> = ({
   }, [refetchBalance]);
 
   const handlePlayAgain = useCallback(() => {
+    playSound('uiClick');
     setGameResult({ winnerId: null, forfeited: false });
     setGameId(null);
     setScreen(Screen.Betting);
@@ -104,7 +108,7 @@ const SolanaGoldRush: React.FC<SolanaGoldRushProps> = ({
         if (!gameId) return <div className="text-center text-xl text-red-500">Error: No Game ID. Please return to lobby.</div>;
         return <GameScreen onGameOver={handleGameOver} betAmount={betAmount} gameId={gameId} walletAddress={walletAddress} nickname={nickname} />;
       case Screen.Winner:
-        return <WinnerScreen winnerId={gameResult.winnerId} betAmount={betAmount} onPlayAgain={handlePlayAgain} onExitGame={handleExit} forfeited={gameResult.forfeited} />;
+        return <WinnerScreen gameId="solana-gold-rush" winnerId={gameResult.winnerId} betAmount={betAmount} onPlayAgain={handlePlayAgain} onExitGame={handleExit} forfeited={gameResult.forfeited} />;
       default:
         return <BettingScreen onFindOpponent={handleFindOpponent} walletConnected={!!walletAddress} balance={balance} onExitGame={onExitGame} onShowHowToPlay={() => setShowHowToPlay(true)} gameName="Gold Rush" colorTheme="yellow" />;
     }

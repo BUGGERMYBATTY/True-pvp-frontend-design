@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BET_AMOUNTS } from '../types.ts';
+import { playSound } from '../utils/audio.ts';
 
 interface BettingScreenProps {
   onFindOpponent: (amount: number) => void;
@@ -25,6 +26,11 @@ const BettingScreen: React.FC<BettingScreenProps> = ({
   const fee = selectedAmount * 0.015;
   const totalCost = selectedAmount + fee;
   const canPlay = walletConnected && balance >= totalCost;
+
+  const handleFindOpponentClick = (amount: number) => {
+    playSound('uiClick');
+    onFindOpponent(amount);
+  };
 
   const colorClasses = {
     blue: {
@@ -100,7 +106,7 @@ const BettingScreen: React.FC<BettingScreenProps> = ({
         )}
 
         <button
-          onClick={() => onFindOpponent(selectedAmount)}
+          onClick={() => handleFindOpponentClick(selectedAmount)}
           disabled={!canPlay}
           className={`w-full py-4 text-2xl font-bold rounded-lg transition-all transform hover:scale-105 shadow-lg ${theme.shadow}
             ${canPlay 

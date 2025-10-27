@@ -21,6 +21,7 @@ const createCosmicDodgeEngine = () => {
         gameOver: false,
         forfeited: false,
         countdownInterval: null,
+        soundEvents: [],
     });
     
     const resetRound = (gameState) => {
@@ -40,6 +41,7 @@ const createCosmicDodgeEngine = () => {
         if (newRound) {
             resetRound(gameState);
             gameState.message = `Round ${gameState.p1.roundsWon + gameState.p2.roundsWon + 1}`;
+            gameState.soundEvents.push('roundStart');
         }
 
         gameState.countdownInterval = setInterval(() => {
@@ -50,7 +52,7 @@ const createCosmicDodgeEngine = () => {
                 gameState.countdown = null;
                 gameState.message = '';
             }
-            global.broadcastGameState(gameSession.gameId);
+            // Broadcasting happens in the main loop
         }, 1000);
     };
 
@@ -59,6 +61,7 @@ const createCosmicDodgeEngine = () => {
         gameState.p1.nickname = players[0].nickname;
         gameState.p2.nickname = players[1].nickname;
         gameState.message = `Round 1`;
+        gameState.soundEvents.push('roundStart');
         startCountdown(gameSession);
     };
 
@@ -141,6 +144,7 @@ const createCosmicDodgeEngine = () => {
                     ship.y < p.y + pHeight && ship.y + SHIP_SIZE > p.y) {
                     ship.alive = false;
                     roundOver = true;
+                    gameState.soundEvents.push('explosion');
                     // Create explosion
                     gameState[pKey].explosions.push({id: Math.random(), x: ship.x, y: ship.y, size: 40, life: 60 });
                 }
@@ -150,8 +154,14 @@ const createCosmicDodgeEngine = () => {
         if (roundOver) {
             const p1Alive = gameState.p1.ship.alive;
             const p2Alive = gameState.p2.ship.alive;
-            if (p1Alive && !p2Alive) gameState.p1.roundsWon++;
-            if (!p1Alive && p2Alive) gameState.p2.roundsWon++;
+            if (p1Alive && !p2Alive) {
+                gameState.p1.roundsWon++;
+                gameState.soundEvents.push('roundWin');
+            }
+            if (!p1Alive && p2Alive) {
+                gameState.p2.roundsWon++;
+                gameState.soundEvents.push('roundWin');
+            }
             // if both die on same frame, it's a draw for the round
 
             if (gameState.p1.roundsWon >= WINNING_ROUNDS || gameState.p2.roundsWon >= WINNING_ROUNDS) {

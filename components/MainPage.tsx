@@ -307,15 +307,13 @@ const MainPage: React.FC<MainPageProps> = ({ onSelectGame }) => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 animate-fadeIn" style={{ animationDelay: '200ms' }}>
-        {/* Fix: The InfoCard component expects a 'children' prop. The descriptive paragraph has been nested inside the component to provide it. */}
+        {/* FIX: The InfoCard component requires a 'children' prop. The descriptive paragraphs are now passed as children to each InfoCard instance. */}
         <InfoCard icon={<WalletIcon />} title="True Self-Custody">
           <p className="text-gray-400">Your funds never leave your wallet. We never take deposits. All wagers are handled by secure, peer-to-peer transactions directly on the Solana blockchain.</p>
         </InfoCard>
-        {/* Fix: The InfoCard component expects a 'children' prop. The descriptive paragraph has been nested inside the component to provide it. */}
         <InfoCard icon={<LightningIcon />} title="Pure Skill, No Luck">
           <p className="text-gray-400">Victory is determined by your skill, not by chance. Our games are designed to be competitive and fair, rewarding strategy and quick reflexes.</p>
         </InfoCard>
-        {/* Fix: The InfoCard component expects a 'children' prop. The descriptive paragraph has been nested inside the component to provide it. */}
         <InfoCard icon={<RocketIcon />} title="Instant Payouts">
           <p className="text-gray-400">Winnings are sent directly to your wallet the moment you win. No waiting, no withdrawals. Just pure, instant gratification powered by Solana.</p>
         </InfoCard>
@@ -385,7 +383,7 @@ const MainPage: React.FC<MainPageProps> = ({ onSelectGame }) => {
           Game Rules
         </h2>
         
-        {/* Fix: The CollapsibleRule component expects a 'children' prop. The game rules have been nested inside the component to provide it. */}
+        {/* FIX: The CollapsibleRule component requires a 'children' prop. The game rules content is now passed as children to each CollapsibleRule instance. */}
         <CollapsibleRule title="Gold Rush" colorTheme="yellow">
           <p>Gold Rush is a game of bidding and bluffing.</p>
           <ol className="list-decimal list-inside space-y-2 mt-4">
@@ -400,7 +398,6 @@ const MainPage: React.FC<MainPageProps> = ({ onSelectGame }) => {
           </ol>
         </CollapsibleRule>
 
-        {/* Fix: The CollapsibleRule component expects a 'children' prop. The game rules have been nested inside the component to provide it. */}
         <CollapsibleRule title="Neon Pong" colorTheme="blue">
            <p>Neon Pong is a classic arcade game with a crypto twist.</p>
           <ul className="list-disc list-inside space-y-2 mt-4">
@@ -412,7 +409,6 @@ const MainPage: React.FC<MainPageProps> = ({ onSelectGame }) => {
           </ul>
         </CollapsibleRule>
         
-        {/* Fix: The CollapsibleRule component expects a 'children' prop. The game rules have been nested inside the component to provide it. */}
         <CollapsibleRule title="Cosmic Dodge" colorTheme="pink">
           <p>Cosmic Dodge is a "bullet hell" survival duel where your only goal is to outlast your opponent.</p>
           <ul className="list-disc list-inside space-y-2 mt-4">

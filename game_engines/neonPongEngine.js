@@ -25,6 +25,7 @@ const createNeonPongEngine = () => {
         gameOver: false,
         forfeited: false,
         countdownInterval: null,
+        soundEvents: [],
     });
 
     const serveBall = (gameState) => {
@@ -36,10 +37,14 @@ const createNeonPongEngine = () => {
         gameState.ball.vy = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 3);
     };
 
-    const startCountdown = (gameSession) => {
+    const startCountdown = (gameSession, playSound = true) => {
         const { gameState } = gameSession;
         if (gameState.countdownInterval) clearInterval(gameState.countdownInterval);
         
+        if (playSound) {
+            gameState.soundEvents.push('roundStart');
+        }
+
         gameState.countdownInterval = setInterval(() => {
             gameState.countdown--;
             if (gameState.countdown <= 0) {
@@ -49,7 +54,7 @@ const createNeonPongEngine = () => {
                 gameState.message = '';
                 serveBall(gameState);
             }
-            global.broadcastGameState(gameSession.gameId);
+            // Broadcasting happens in the main game loop, which will pick up the countdown change
         }, 1000);
     };
 
@@ -58,7 +63,7 @@ const createNeonPongEngine = () => {
         gameState.p1.nickname = players[0].nickname;
         gameState.p2.nickname = players[1].nickname;
         gameState.message = `Round ${gameState.p1.roundsWon + gameState.p2.roundsWon + 1}`;
-        startCountdown(gameSession);
+        startCountdown(gameSession, true);
     };
 
     const handleInput = (gameSession, playerWallet, data) => {
@@ -97,6 +102,7 @@ const createNeonPongEngine = () => {
         // Ball collision with top/bottom walls
         if (gameState.ball.y <= 0 || gameState.ball.y >= GAME_HEIGHT - BALL_SIZE) {
             gameState.ball.vy *= -1;
+            gameState.soundEvents.push('wallHit');
         }
         
         // Ball collision with paddles
@@ -111,6 +117,7 @@ const createNeonPongEngine = () => {
                 gameState.ball.vx *= -1.05; // Increase speed
                 let deltaY = gameState.ball.y - (gameState.p1.y + PADDLE_HEIGHT / 2);
                 gameState.ball.vy = deltaY * 0.2;
+                gameState.soundEvents.push('paddleHit');
         }
 
         if (gameState.ball.vx > 0 &&
@@ -121,6 +128,7 @@ const createNeonPongEngine = () => {
                 gameState.ball.vx *= -1.05; // Increase speed
                 let deltaY = gameState.ball.y - (gameState.p2.y + PADDLE_HEIGHT / 2);
                 gameState.ball.vy = deltaY * 0.2;
+                gameState.soundEvents.push('paddleHit');
         }
 
         // Scoring
@@ -134,6 +142,7 @@ const createNeonPongEngine = () => {
         }
         
         if (scored) {
+            gameState.soundEvents.push('score');
             if (gameState.p1.score >= WINNING_SCORE || gameState.p2.score >= WINNING_SCORE) {
                  if (gameState.p1.score > gameState.p2.score) gameState.p1.roundsWon++;
                  else gameState.p2.roundsWon++;
@@ -146,12 +155,12 @@ const createNeonPongEngine = () => {
                      gameState.p2.score = 0;
                      gameState.countdown = 3;
                      gameState.message = `Round ${gameState.p1.roundsWon + gameState.p2.roundsWon + 1}`;
-                     startCountdown(gameSession);
+                     startCountdown(gameSession, true);
                  }
             } else {
                 gameState.countdown = 1;
                 gameState.message = "Score!";
-                startCountdown(gameSession);
+                startCountdown(gameSession, false); // No round start sound, just score
             }
         }
     };

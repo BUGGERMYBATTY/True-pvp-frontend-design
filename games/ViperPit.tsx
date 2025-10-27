@@ -5,6 +5,7 @@ import MatchingScreen from '../components/MatchingScreen.tsx';
 import ViperPitGameScreen from '../components/ViperPitGameScreen.tsx';
 import WinnerScreen from '../components/WinnerScreen.tsx';
 import HowToPlayModal from '../components/HowToPlayModal.tsx';
+import { playSound } from '../utils/audio.ts';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -43,6 +44,7 @@ const ViperPit: React.FC<ViperPitProps> = ({
     setScreen(Screen.Matching);
     const matchResult = await onRequestMatch('cosmic-dodge', amount);
     if (matchResult?.matched && matchResult.gameId) {
+      playSound('matchFound');
       setGameId(matchResult.gameId);
       setScreen(Screen.Game);
     } else if (matchResult === null) {
@@ -58,6 +60,7 @@ const ViperPit: React.FC<ViperPitProps> = ({
         const data = await response.json();
         if (data.status === 'matched' && data.gameId) {
           clearInterval(intervalId);
+          playSound('matchFound');
           setGameId(data.gameId);
           setScreen(Screen.Game);
         }
@@ -73,6 +76,7 @@ const ViperPit: React.FC<ViperPitProps> = ({
   }, [refetchBalance]);
 
   const handlePlayAgain = useCallback(() => {
+    playSound('uiClick');
     setGameResult({ winnerId: null, forfeited: false });
     setGameId(null);
     setScreen(Screen.Betting);
@@ -112,6 +116,7 @@ const ViperPit: React.FC<ViperPitProps> = ({
       case Screen.Winner:
         return (
           <WinnerScreen 
+            gameId="cosmic-dodge"
             winnerId={gameResult.winnerId} 
             betAmount={betAmount} 
             onPlayAgain={handlePlayAgain} 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { playSound } from '../utils/audio.ts';
 
 const ARENA_WIDTH = 350;
 const ARENA_HEIGHT = 450;
@@ -20,6 +21,12 @@ const ViperPitGameScreen: React.FC<ViperPitGameScreenProps> = ({ onGameOver, bet
     const keysPressed = useRef<{ [key: string]: boolean }>({});
     const starfieldCanvasRef = useRef<HTMLCanvasElement>(null);
     const starsRef = useRef<{ x: number; y: number; z: number }[]>([]);
+
+    useEffect(() => {
+        if (gameState?.soundEvents?.length > 0) {
+            gameState.soundEvents.forEach((sound: string) => playSound(sound));
+        }
+    }, [gameState]);
 
     useEffect(() => {
         ws.current = new WebSocket(WS_URL);

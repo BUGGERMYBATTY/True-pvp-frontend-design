@@ -5,6 +5,7 @@ import MatchingScreen from '../components/MatchingScreen.tsx';
 import PongGameScreen from '../components/PongGameScreen.tsx';
 import WinnerScreen from '../components/WinnerScreen.tsx';
 import HowToPlayModal from '../components/HowToPlayModal.tsx';
+import { playSound } from '../utils/audio.ts';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -45,6 +46,7 @@ const NeonPong: React.FC<NeonPongProps> = ({
     setScreen(Screen.Matching);
     const matchResult = await onRequestMatch('neon-pong', amount);
     if (matchResult?.matched && matchResult.gameId) {
+      playSound('matchFound');
       setGameId(matchResult.gameId);
       setScreen(Screen.Game);
     } else if (matchResult === null) {
@@ -60,6 +62,7 @@ const NeonPong: React.FC<NeonPongProps> = ({
         const data = await response.json();
         if (data.status === 'matched' && data.gameId) {
           clearInterval(intervalId);
+          playSound('matchFound');
           setGameId(data.gameId);
           setScreen(Screen.Game);
         }
@@ -75,6 +78,7 @@ const NeonPong: React.FC<NeonPongProps> = ({
   }, [refetchBalance]);
 
   const handlePlayAgain = useCallback(() => {
+    playSound('uiClick');
     setGameResult({ winnerId: null, forfeited: false });
     setGameId(null);
     setScreen(Screen.Betting);
@@ -112,7 +116,7 @@ const NeonPong: React.FC<NeonPongProps> = ({
           />
         );
       case Screen.Winner:
-        return <WinnerScreen winnerId={gameResult.winnerId} betAmount={betAmount} onPlayAgain={handlePlayAgain} onExitGame={handleExit} forfeited={gameResult.forfeited}/>;
+        return <WinnerScreen gameId="neon-pong" winnerId={gameResult.winnerId} betAmount={betAmount} onPlayAgain={handlePlayAgain} onExitGame={handleExit} forfeited={gameResult.forfeited}/>;
       default:
         return <BettingScreen onFindOpponent={handleFindOpponent} walletConnected={!!walletAddress} balance={balance} onExitGame={onExitGame} onShowHowToPlay={() => setShowHowToPlay(true)} gameName="Neon Pong" colorTheme="blue"/>;
     }

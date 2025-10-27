@@ -4,6 +4,8 @@ import MainPage from './components/MainPage.tsx';
 import SolanaGoldRush from './games/SolanaGoldRush.tsx';
 import NeonPong from './games/NeonPong.tsx';
 import ViperPit from './games/ViperPit.tsx';
+import { toggleMute, getMuteState, playSound } from './utils/audio.ts';
+
 
 const GAME_TITLES: { [key: string]: string } = {
   'solana-gold-rush': 'Gold Rush',
@@ -13,6 +15,19 @@ const GAME_TITLES: { [key: string]: string } = {
 
 // Use the standard VITE_ variable name for environment variables
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
+
+// --- Sound Icons ---
+const SoundOnIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+    </svg>
+);
+const SoundOffIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2" />
+    </svg>
+);
 
 
 // --- Modal Components ---
@@ -88,6 +103,11 @@ const App: React.FC = () => {
   const [showDisclaimer, setShowDisclaimer] = useState<boolean>(false);
   const [showNicknameModal, setShowNicknameModal] = useState<boolean>(false);
   const [dontShowDisclaimerAgain, setDontShowDisclaimerAgain] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState(getMuteState());
+  
+  const handleToggleMute = () => {
+      setIsMuted(toggleMute());
+  };
   
   useEffect(() => {
     if ("solana" in window) {
@@ -151,6 +171,7 @@ const App: React.FC = () => {
   }, [provider]);
 
   const handleConnectWallet = useCallback(() => {
+    playSound('uiClick');
     if (!provider) {
       alert('Phantom wallet not found. Please install the Phantom browser extension.');
       return;
@@ -172,6 +193,7 @@ const App: React.FC = () => {
   }, [provider, connectWalletAction]);
   
   const handleDisclaimerConfirm = useCallback(async () => {
+    playSound('uiClick');
     setShowDisclaimer(false);
     sessionStorage.setItem('disclaimerAcknowledged', 'true');
 
@@ -183,6 +205,7 @@ const App: React.FC = () => {
   }, [dontShowDisclaimerAgain, connectWalletAction]);
 
   const handleDisconnectWallet = useCallback(async () => {
+    playSound('uiClick');
     if (isDemoMode) {
       setWalletConnected(false);
       setWalletAddress('');
@@ -203,6 +226,7 @@ const App: React.FC = () => {
   }, [provider, isDemoMode]);
 
   const handlePlayAsGuest = useCallback(() => {
+    playSound('uiClick');
     let guestId = sessionStorage.getItem('guestId');
     if (!guestId) {
       guestId = `GUEST_${Math.random().toString(36).substring(2, 10)}`;
@@ -217,6 +241,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleSetNickname = useCallback((newNickname: string) => {
+    playSound('uiClick');
     if (walletAddress) {
         const storedNicknames = JSON.parse(localStorage.getItem('userNicknames') || '{}');
         storedNicknames[walletAddress] = newNickname;
@@ -239,10 +264,12 @@ const App: React.FC = () => {
   }, [walletAddress, connection, isDemoMode]);
 
   const handleSelectGame = useCallback((gameId: string) => {
+    playSound('uiClick');
     setCurrentGame(gameId);
   }, []);
 
   const handleExitGame = useCallback(() => {
+    playSound('uiClick');
     setCurrentGame(null);
   }, []);
 
@@ -270,6 +297,7 @@ const App: React.FC = () => {
   }, [walletAddress, walletConnected, nickname]);
 
   const handleCancelMatch = useCallback(async (gameId: string, betAmount: number) => {
+    playSound('uiClick');
     try {
         await fetch(`${API_BASE_URL}/api/matchmaking/cancel`, {
             method: 'POST',
@@ -311,16 +339,21 @@ const App: React.FC = () => {
             <img src="/my-new-logo.svg" alt="TRUEPVP.io Logo" className="h-14" />
           )}
         </div>
-        <Wallet
-          connected={walletConnected}
-          address={walletAddress}
-          nickname={nickname}
-          balance={balance}
-          onConnect={handleConnectWallet}
-          onDisconnect={handleDisconnectWallet}
-          isDemoMode={isDemoMode}
-          onPlayAsGuest={handlePlayAsGuest}
-        />
+        <div className="flex items-center gap-4">
+            <button onClick={handleToggleMute} className="text-gray-400 hover:text-white transition-colors" aria-label="Toggle sound">
+                {isMuted ? <SoundOffIcon /> : <SoundOnIcon />}
+            </button>
+            <Wallet
+              connected={walletConnected}
+              address={walletAddress}
+              nickname={nickname}
+              balance={balance}
+              onConnect={handleConnectWallet}
+              onDisconnect={handleDisconnectWallet}
+              isDemoMode={isDemoMode}
+              onPlayAsGuest={handlePlayAsGuest}
+            />
+        </div>
       </header>
       <div className="w-full max-w-5xl flex items-center justify-center mt-8 px-4">
         {!currentGame && <MainPage onSelectGame={handleSelectGame} />}

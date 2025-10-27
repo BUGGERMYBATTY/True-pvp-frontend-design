@@ -221,6 +221,9 @@ function broadcastGameState(gameId) {
             // Get the base state from the engine
             const baseState = gameSession.engine.getStateForPlayer(gameSession, player.walletAddress);
 
+            // Attach sound events to the state payload
+            baseState.soundEvents = gameSession.gameState.soundEvents || [];
+
             // If game is over, transform winnerId to be client-specific and add forfeit flag
             // This ensures the client always knows if "it" won (winnerId: 1), lost (winnerId: 2), or drew (winnerId: null)
             if (baseState.gameOver) {
@@ -238,6 +241,11 @@ function broadcastGameState(gameId) {
             player.ws.send(JSON.stringify(baseState));
         }
     });
+
+    // Clear sound events after they have been broadcast to all players
+    if (gameSession.gameState.soundEvents) {
+        gameSession.gameState.soundEvents = [];
+    }
 }
 
 global.broadcastGameState = broadcastGameState; // Make it accessible to engines

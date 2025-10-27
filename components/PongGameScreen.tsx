@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { playSound } from '../utils/audio.ts';
 
 // Game constants (for rendering only)
 const PADDLE_HEIGHT = 100;
@@ -20,6 +21,13 @@ interface PongGameScreenProps {
 const PongGameScreen: React.FC<PongGameScreenProps> = ({ onGameOver, betAmount, gameId, walletAddress, nickname }) => {
   const [gameState, setGameState] = useState<any>(null);
   const ws = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    if (gameState?.soundEvents?.length > 0) {
+      gameState.soundEvents.forEach((sound: string) => playSound(sound));
+    }
+  }, [gameState]);
+
 
   useEffect(() => {
     ws.current = new WebSocket(WS_URL);
