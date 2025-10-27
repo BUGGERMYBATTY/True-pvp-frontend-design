@@ -1,200 +1,237 @@
-// --- Server-Authoritative Game Engine for Neon Pong ---
+const GAME_WIDTH = 600;
+const GAME_HEIGHT = 400;
+const PADDLE_HEIGHT = 100;
+const PADDLE_WIDTH = 12;
+const BALL_SIZE = 12;
+const PADDLE_SPEED = 6;
+const INITIAL_BALL_SPEED = 5;
+const MAX_BALL_SPEED = 10;
+const POINTS_TO_WIN_ROUND = 3;
+const ROUNDS_TO_WIN_MATCH = 2;
 
-const createNeonPongEngine = () => {
-    // --- Game Constants ---
-    const GAME_WIDTH = 600;
-    const GAME_HEIGHT = 400;
-    const PADDLE_WIDTH = 12;
-    const PADDLE_HEIGHT = 100;
-    const BALL_SIZE = 12;
-    const PADDLE_SPEED = 6;
-    const PADDLE_X_OFFSET = 20; // Distance from edge
-    const WINNING_SCORE = 3;
-    const WINNING_ROUNDS = 2;
+class NeonPongEngine {
+    constructor() {
+        this.players = [];
+        this.ball = {};
+        this.gameOver = false;
+        this.winnerId = null;
+        this.isDraw = false;
+        this.message = '';
+        this.soundEvents = [];
+    }
 
-    let initialBallSpeedX = 5;
+    init(players) {
+        this.players = players.map((p, index) => ({
+            ...p,
+            id: index + 1,
+            x: index === 0 ? 10 : GAME_WIDTH - PADDLE_WIDTH - 10,
+            y: GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2,
+            width: PADDLE_WIDTH,
+            height: PADDLE_HEIGHT,
+            dy: 0,
+            score: 0,
+            roundsWon: 0,
+            keys: { up: false, down: false },
+            isBot: p.isBot || false,
+        }));
+        this.resetBall();
+        this.startRoundCountdown();
+    }
 
-    // --- Engine Methods ---
-    const init = () => ({
-        p1: { y: GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2, vy: 0, score: 0, roundsWon: 0, nickname: 'Player 1' },
-        p2: { y: GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2, vy: 0, score: 0, roundsWon: 0, nickname: 'Player 2' },
-        ball: { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2, vx: 0, vy: 0 },
-        countdown: 3,
-        message: 'Waiting for opponent...',
-        winnerId: null,
-        gameOver: false,
-        forfeited: false,
-        countdownInterval: null,
-        soundEvents: [],
-    });
+    startRoundCountdown(delay = 1000) {
+        this.message = 'Get Ready!';
+        setTimeout(() => {
+            let count = 3;
+            this.message = count;
+            this.soundEvents.push('roundStart');
+            const interval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    this.message = count;
+                    this.soundEvents.push('roundStart');
+                } else {
+                    this.message = '';
+                    clearInterval(interval);
+                    this.ball.dx = Math.random() > 0.5 ? INITIAL_BALL_SPEED : -INITIAL_BALL_SPEED;
+                    this.ball.dy = (Math.random() - 0.5) * INITIAL_BALL_SPEED;
+                }
+            }, 1000);
+        }, delay);
+    }
+    
+    resetBall(direction = 1) {
+        this.ball = {
+            x: GAME_WIDTH / 2 - BALL_SIZE / 2,
+            y: GAME_HEIGHT / 2 - BALL_SIZE / 2,
+            width: BALL_SIZE,
+            height: BALL_SIZE,
+            dx: 0, // No movement until countdown ends
+            dy: 0,
+            speed: INITIAL_BALL_SPEED,
+        };
+    }
 
-    const serveBall = (gameState) => {
-        gameState.ball.x = GAME_WIDTH / 2;
-        gameState.ball.y = GAME_HEIGHT / 2;
-        // Alternate serve direction
-        initialBallSpeedX *= -1;
-        gameState.ball.vx = initialBallSpeedX;
-        gameState.ball.vy = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 3);
-    };
+    handleInput(playerId, data) {
+        const player = this.players.find(p => p.id === playerId);
+        if (!player) return;
 
-    const startCountdown = (gameSession, playSound = true) => {
-        const { gameState } = gameSession;
-        if (gameState.countdownInterval) clearInterval(gameState.countdownInterval);
-        
-        if (playSound) {
-            gameState.soundEvents.push('roundStart');
-        }
-
-        gameState.countdownInterval = setInterval(() => {
-            gameState.countdown--;
-            if (gameState.countdown <= 0) {
-                clearInterval(gameState.countdownInterval);
-                gameState.countdownInterval = null;
-                gameState.countdown = null;
-                gameState.message = '';
-                serveBall(gameState);
-            }
-            // Broadcasting happens in the main game loop, which will pick up the countdown change
-        }, 1000);
-    };
-
-    const start = (gameSession) => {
-        const { gameState, players } = gameSession;
-        gameState.p1.nickname = players[0].nickname;
-        gameState.p2.nickname = players[1].nickname;
-        gameState.message = `Round ${gameState.p1.roundsWon + gameState.p2.roundsWon + 1}`;
-        startCountdown(gameSession, true);
-    };
-
-    const handleInput = (gameSession, playerWallet, data) => {
-        const { gameState, players } = gameSession;
-        if (gameState.gameOver || gameState.countdown) return;
-
-        const playerIndex = players.findIndex(p => p.walletAddress === playerWallet);
-        const playerKey = playerIndex === 0 ? 'p1' : 'p2';
-        const player = gameState[playerKey];
-        
         if (data.type === 'move_paddle') {
-            player.vy = data.direction === 'up' ? -PADDLE_SPEED : PADDLE_SPEED;
+            player.keys[data.direction] = true;
         } else if (data.type === 'stop_paddle') {
-            if ((data.direction === 'up' && player.vy < 0) || (data.direction === 'down' && player.vy > 0)) {
-                player.vy = 0;
-            }
+            player.keys[data.direction] = false;
         }
-    };
+    }
 
-    const update = (gameSession) => {
-        const { gameState } = gameSession;
-        if (gameState.gameOver || gameState.countdown) return;
-
+    update() {
+        if (this.gameOver) return;
+        
         // Move paddles
-        gameState.p1.y += gameState.p1.vy;
-        gameState.p2.y += gameState.p2.vy;
+        this.players.forEach(player => {
+             if (player.isBot) {
+                this.handleBotInput(player);
+            } else {
+                if (player.keys.up) player.dy = -PADDLE_SPEED;
+                else if (player.keys.down) player.dy = PADDLE_SPEED;
+                else player.dy = 0;
+            }
 
-        // Paddle bounds
-        gameState.p1.y = Math.max(0, Math.min(gameState.p1.y, GAME_HEIGHT - PADDLE_HEIGHT));
-        gameState.p2.y = Math.max(0, Math.min(gameState.p2.y, GAME_HEIGHT - PADDLE_HEIGHT));
-        
+            player.y += player.dy;
+
+            // Wall collision for paddles
+            if (player.y < 0) player.y = 0;
+            if (player.y > GAME_HEIGHT - PADDLE_HEIGHT) player.y = GAME_HEIGHT - PADDLE_HEIGHT;
+        });
+
         // Move ball
-        gameState.ball.x += gameState.ball.vx;
-        gameState.ball.y += gameState.ball.vy;
+        if (this.ball.dx === 0 && this.ball.dy === 0) return; // Ball is not active
+        this.ball.x += this.ball.dx;
+        this.ball.y += this.ball.dy;
 
-        // Ball collision with top/bottom walls
-        if (gameState.ball.y <= 0 || gameState.ball.y >= GAME_HEIGHT - BALL_SIZE) {
-            gameState.ball.vy *= -1;
-            gameState.soundEvents.push('wallHit');
-        }
-        
-        // Ball collision with paddles
-        const p1_x = PADDLE_X_OFFSET;
-        const p2_x = GAME_WIDTH - PADDLE_X_OFFSET - PADDLE_WIDTH;
-
-        if (gameState.ball.vx < 0 && 
-            gameState.ball.x < p1_x + PADDLE_WIDTH && 
-            gameState.ball.x > p1_x &&
-            gameState.ball.y > gameState.p1.y && 
-            gameState.ball.y < gameState.p1.y + PADDLE_HEIGHT) {
-                gameState.ball.vx *= -1.05; // Increase speed
-                let deltaY = gameState.ball.y - (gameState.p1.y + PADDLE_HEIGHT / 2);
-                gameState.ball.vy = deltaY * 0.2;
-                gameState.soundEvents.push('paddleHit');
+        // Ball wall collision (top/bottom)
+        if (this.ball.y <= 0 || this.ball.y >= GAME_HEIGHT - BALL_SIZE) {
+            this.ball.dy *= -1;
+            this.soundEvents.push('wallHit');
         }
 
-        if (gameState.ball.vx > 0 &&
-            gameState.ball.x > p2_x - BALL_SIZE &&
-            gameState.ball.x < p2_x + PADDLE_WIDTH - BALL_SIZE &&
-            gameState.ball.y > gameState.p2.y &&
-            gameState.ball.y < gameState.p2.y + PADDLE_HEIGHT) {
-                gameState.ball.vx *= -1.05; // Increase speed
-                let deltaY = gameState.ball.y - (gameState.p2.y + PADDLE_HEIGHT / 2);
-                gameState.ball.vy = deltaY * 0.2;
-                gameState.soundEvents.push('paddleHit');
-        }
+        // Ball paddle collision
+        this.players.forEach(player => {
+            if (this.isColliding(this.ball, player)) {
+                this.ball.dx *= -1;
+
+                // Increase speed
+                this.ball.speed = Math.min(MAX_BALL_SPEED, this.ball.speed * 1.1);
+                
+                // Adjust angle based on where it hit the paddle
+                const paddleCenter = player.y + PADDLE_HEIGHT / 2;
+                const hitPos = (this.ball.y + BALL_SIZE / 2) - paddleCenter;
+                this.ball.dy = hitPos * 0.1;
+                
+                 // Apply new speed
+                const magnitude = Math.sqrt(this.ball.dx ** 2 + this.ball.dy ** 2);
+                this.ball.dx = (this.ball.dx / magnitude) * this.ball.speed;
+                this.ball.dy = (this.ball.dy / magnitude) * this.ball.speed;
+                
+                this.soundEvents.push('paddleHit');
+            }
+        });
 
         // Scoring
-        let scored = false;
-        if (gameState.ball.x < 0) {
-            gameState.p2.score++;
-            scored = true;
-        } else if (gameState.ball.x > GAME_WIDTH) {
-            gameState.p1.score++;
-            scored = true;
+        if (this.ball.x < 0) {
+            this.handleScore(this.players[1]);
+        } else if (this.ball.x > GAME_WIDTH) {
+            this.handleScore(this.players[0]);
         }
+    }
+    
+    handleBotInput(bot) {
+        // Simple AI: Track the ball's y position
+        const paddleCenter = bot.y + PADDLE_HEIGHT / 2;
+        const ballCenter = this.ball.y + BALL_SIZE / 2;
+        const errorMargin = 5; 
+
+        if (paddleCenter < ballCenter - errorMargin) {
+            bot.dy = PADDLE_SPEED * 0.8; // Move slightly slower than a player
+        } else if (paddleCenter > ballCenter + errorMargin) {
+            bot.dy = -PADDLE_SPEED * 0.8;
+        } else {
+            bot.dy = 0;
+        }
+    }
+
+    handleScore(scoringPlayer) {
+        scoringPlayer.score++;
+        this.soundEvents.push('score');
         
-        if (scored) {
-            gameState.soundEvents.push('score');
-            if (gameState.p1.score >= WINNING_SCORE || gameState.p2.score >= WINNING_SCORE) {
-                 if (gameState.p1.score > gameState.p2.score) gameState.p1.roundsWon++;
-                 else gameState.p2.roundsWon++;
-                 
-                 if (gameState.p1.roundsWon >= WINNING_ROUNDS || gameState.p2.roundsWon >= WINNING_ROUNDS) {
-                     gameState.gameOver = true;
-                     gameState.winnerId = gameState.p1.roundsWon > gameState.p2.roundsWon ? 1 : 2;
-                 } else {
-                     gameState.p1.score = 0;
-                     gameState.p2.score = 0;
-                     gameState.countdown = 3;
-                     gameState.message = `Round ${gameState.p1.roundsWon + gameState.p2.roundsWon + 1}`;
-                     startCountdown(gameSession, true);
-                 }
+        if (scoringPlayer.score >= POINTS_TO_WIN_ROUND) {
+            scoringPlayer.roundsWon++;
+            this.message = `${scoringPlayer.nickname} wins the round!`;
+            
+            if (scoringPlayer.roundsWon >= ROUNDS_TO_WIN_MATCH) {
+                this.endGame(scoringPlayer.id);
             } else {
-                gameState.countdown = 1;
-                gameState.message = "Score!";
-                startCountdown(gameSession, false); // No round start sound, just score
+                this.players.forEach(p => p.score = 0);
+                this.resetBall();
+                this.startRoundCountdown(2000);
             }
+        } else {
+            this.resetBall(scoringPlayer.id === 1 ? -1 : 1);
+            this.startRoundCountdown(2000);
         }
-    };
+    }
+    
+    endGame(winnerId) {
+        this.gameOver = true;
+        this.winnerId = winnerId;
+    }
 
-    const getStateForPlayer = (gameSession, playerWallet) => {
-        const { gameState, players } = gameSession;
-        const playerIndex = players.findIndex(p => p.walletAddress === playerWallet);
-        const isP1 = playerIndex === 0;
-
-        const you = isP1 ? gameState.p1 : gameState.p2;
-        const opponent = isP1 ? gameState.p2 : gameState.p1;
+    isColliding(rect1, rect2) {
+        return rect1.x < rect2.x + rect2.width &&
+               rect1.x + rect1.width > rect2.x &&
+               rect1.y < rect2.y + rect2.height &&
+               rect1.y + rect1.height > rect2.y;
+    }
+    
+    forfeit(playerId) {
+        this.gameOver = true;
+        const winner = this.players.find(p => p.id !== playerId);
+        this.winnerId = winner.id;
+    }
+    
+    isGameOver() {
+        return this.gameOver;
+    }
+    
+    getState(playerId) {
+        const player = this.players.find(p => p.id === playerId);
+        const opponent = this.players.find(p => p.id !== playerId);
         
         return {
             you: {
-                x: PADDLE_X_OFFSET,
-                y: you.y,
-                score: you.score,
-                roundsWon: you.roundsWon,
-                nickname: you.nickname,
+                id: player.id,
+                x: player.x,
+                y: player.y,
+                score: player.score,
+                roundsWon: player.roundsWon,
+                nickname: player.nickname,
             },
             opponent: {
-                x: PADDLE_X_OFFSET,
+                id: opponent.id,
+                x: opponent.x,
                 y: opponent.y,
                 score: opponent.score,
                 roundsWon: opponent.roundsWon,
-                nickname: opponent.nickname
+                nickname: opponent.nickname,
             },
-            ball: gameState.ball,
-            message: gameState.countdown || gameState.message,
-            gameOver: gameState.gameOver,
+            ball: {
+                x: this.ball.x,
+                y: this.ball.y
+            },
+            message: this.message,
+            gameOver: this.gameOver,
+            winnerId: this.winnerId,
+            soundEvents: [...this.soundEvents],
         };
-    };
+    }
+}
 
-    return { init, start, handleInput, update, getStateForPlayer };
-};
-
-module.exports = createNeonPongEngine;
+module.exports = NeonPongEngine;

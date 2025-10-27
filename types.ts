@@ -1,5 +1,6 @@
 export enum Screen {
   Lobby,
+  Matching,
   Game,
   Winner,
 }

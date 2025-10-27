@@ -1,269 +1,299 @@
-const http = require('http');
 const express = require('express');
-const { WebSocketServer } = require('ws');
+const http = require('http');
+const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 
-// --- Game Engines ---
-const createSolanaGoldRushEngine = require('./game_engines/solanaGoldRushEngine.js');
-const createNeonPongEngine = require('./game_engines/neonPongEngine.js');
-const createCosmicDodgeEngine = require('./game_engines/cosmicDodgeEngine.js');
-const createChessEngine = require('./game_engines/chessEngine.js');
+const SolanaGoldRushEngine = require('./game_engines/solanaGoldRushEngine.js');
+const NeonPongEngine = require('./game_engines/neonPongEngine.js');
+const CosmicDodgeEngine = require('./game_engines/cosmicDodgeEngine.js');
+const ChessEngine = require('./game_engines/chessEngine.js');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocket.Server({ server });
 
-// --- Server State ---
-let lobbies = {
-    guest: {},
-    phantom: {}
+// --- Data Stores (In-Memory) ---
+const lobbies = {
+    'solana-gold-rush': {},
+    'neon-pong': {},
+    'cosmic-dodge': {},
+    'chess': {},
 };
-let gameSessions = {};
+const activeGames = {};
+const clients = new Map(); // For WebSocket connections
 
+// --- Game Engine Mapping ---
 const gameEngines = {
-    'solana-gold-rush': createSolanaGoldRushEngine(),
-    'neon-pong': createNeonPongEngine(),
-    'cosmic-dodge': createCosmicDodgeEngine(),
-    'chess': createChessEngine(),
+    'solana-gold-rush': SolanaGoldRushEngine,
+    'neon-pong': NeonPongEngine,
+    'cosmic-dodge': CosmicDodgeEngine,
+    'chess': ChessEngine,
 };
 
-// --- API Endpoints for Lobby System ---
-app.post('/api/lobbies/create', (req, res) => {
-    const { gameType, betAmount, walletAddress, nickname, walletType } = req.body;
-    if (!['guest', 'phantom'].includes(walletType)) {
-        return res.status(400).json({ error: 'Invalid wallet type.' });
-    }
-    
-    // Prevent user from creating multiple lobbies
-    for (const lobbyId in lobbies[walletType]) {
-        if (lobbies[walletType][lobbyId].creator.walletAddress === walletAddress) {
-            return res.status(400).json({ error: 'You already have an active lobby.' });
-        }
-    }
 
+// --- HTTP API Endpoints ---
+
+// LOBBY: Create a new lobby
+app.post('/api/lobbies/create', (req, res) => {
+    const { gameType, betAmount, creator, walletType } = req.body;
+    if (!lobbies[gameType] || !creator) {
+        return res.status(400).json({ error: 'Invalid game type or creator' });
+    }
     const lobbyId = uuidv4();
-    lobbies[walletType][lobbyId] = {
+    lobbies[gameType][lobbyId] = {
         lobbyId,
         gameType,
         betAmount,
-        creator: { walletAddress, nickname },
-        createdAt: Date.now(),
+        creator,
+        walletType, // 'guest' or 'phantom'
+        players: [creator],
     };
-    console.log(`[Lobby Created][${walletType}] ${nickname} created ${gameType} lobby for ${betAmount} SOL.`);
+    console.log(`[Lobby Created] Game: ${gameType}, ID: ${lobbyId}, Bet: ${betAmount}`);
+    broadcastLobbyUpdate(gameType);
     res.status(201).json({ lobbyId });
 });
 
-app.get('/api/lobbies/list/:walletType', (req, res) => {
-    const { walletType } = req.params;
-     if (!['guest', 'phantom'].includes(walletType)) {
-        return res.status(400).json({ error: 'Invalid wallet type.' });
+// LOBBY: List open lobbies for a game type
+app.get('/api/lobbies/list/:gameType/:walletType', (req, res) => {
+    const { gameType, walletType } = req.params;
+    if (!lobbies[gameType]) {
+        return res.status(400).json({ error: 'Invalid game type' });
     }
-    res.json(Object.values(lobbies[walletType]));
+    // Filter lobbies to only show those matching the player's wallet type
+    const availableLobbies = Object.values(lobbies[gameType]).filter(lobby => lobby.players.length === 1 && lobby.walletType === walletType);
+    res.json({ lobbies: availableLobbies });
 });
 
+// LOBBY: Join an existing lobby
 app.post('/api/lobbies/join', (req, res) => {
-    const { lobbyId, joinerWalletAddress, joinerNickname, walletType } = req.body;
-    if (!['guest', 'phantom'].includes(walletType)) {
-        return res.status(400).json({ error: 'Invalid wallet type.' });
+    const { lobbyId, player, gameType } = req.body;
+    const lobby = lobbies[gameType]?.[lobbyId];
+
+    if (!lobby || lobby.players.length >= 2) {
+        return res.status(404).json({ error: 'Lobby not found or is full' });
     }
 
-    const lobby = lobbies[walletType][lobbyId];
-    if (!lobby) {
-        return res.status(404).json({ error: 'Lobby not found.' });
-    }
-
-    if (lobby.creator.walletAddress === joinerWalletAddress) {
-        return res.status(400).json({ error: "You can't join your own lobby." });
-    }
-
+    lobby.players.push(player);
+    console.log(`[Player Joined] Lobby ID: ${lobbyId}, Player: ${player.nickname}`);
+    
+    // --- Start Game ---
     const gameId = uuidv4();
-    const engine = gameEngines[lobby.gameType];
-    if (!engine) {
-        return res.status(400).json({ error: 'Invalid game type.' });
-    }
-
-    const players = [
-        { ...lobby.creator },
-        { walletAddress: joinerWalletAddress, nickname: joinerNickname }
-    ];
-
-    gameSessions[gameId] = {
+    const gameEngine = new gameEngines[gameType]();
+    activeGames[gameId] = {
+        engine: gameEngine,
+        players: lobby.players.map((p, index) => ({ ...p, id: index + 1 })), // Assign player IDs 1 and 2
         gameId,
-        gameType: lobby.gameType,
-        players,
+        gameType,
         betAmount: lobby.betAmount,
-        gameState: engine.init(),
-        clients: new Set(),
-        isRealTime: ['neon-pong', 'cosmic-dodge'].includes(lobby.gameType),
+        subscribers: new Set(),
     };
+    gameEngine.init(activeGames[gameId].players);
 
-    delete lobbies[walletType][lobbyId];
-    console.log(`[Game Started] ${lobby.creator.nickname} vs ${joinerNickname} in ${lobby.gameType}. Game ID: ${gameId}`);
-    res.status(200).json({ gameId });
-});
-
-app.get('/api/lobbies/status/:lobbyId', (req, res) => {
-    const { lobbyId } = req.params;
-    
-    // Check both pools for the lobby
-    let foundLobby = Object.values(lobbies.guest).find(l => l.lobbyId === lobbyId) || 
-                     Object.values(lobbies.phantom).find(l => l.lobbyId === lobbyId);
-    
-    // If lobby is not found, check if a game has been created from it
-    let gameId = null;
-    if (!foundLobby) {
-        const game = Object.values(gameSessions).find(gs => gs.players.some(p => p.lobbyId === lobbyId));
-        if (game) {
-            gameId = game.gameId;
-        }
-    }
-    
-    const game = Object.values(gameSessions).find(gs => gs.players[0].lobbyId === lobbyId);
-    if (!foundLobby && game) {
-        return res.json({ status: 'matched', gameId: game.gameId });
-    }
-    
-    if (foundLobby) {
-        return res.json({ status: 'waiting' });
-    }
-
-    // After a join, the lobby is deleted. The client that created the lobby polls this status.
-    // We need to find the game that was just created from this lobby.
-    const activeGame = Object.values(gameSessions).find(g => g.lobbyId === lobbyId);
-    if(activeGame) {
-        return res.json({ status: 'matched', gameId: activeGame.gameId });
-    }
-    
-    // Find game by checking players if lobbyId was attached to creator
-    const gameFromCreator = Object.values(gameSessions).find(g => g.players[0].lobbyId === lobbyId);
-     if (gameFromCreator) {
-        return res.json({ status: 'matched', gameId: gameFromCreator.gameId });
-    }
-
-
-    return res.json({ status: 'not_found' });
-});
-
-app.post('/api/lobbies/cancel', (req, res) => {
-    const { lobbyId, walletType } = req.body;
-    if (lobbies[walletType] && lobbies[walletType][lobbyId]) {
-        console.log(`[Lobby Canceled] Lobby ${lobbyId} canceled.`);
-        delete lobbies[walletType][lobbyId];
-        res.status(200).json({ message: 'Lobby canceled.' });
-    } else {
-        res.status(404).json({ message: 'Lobby not found.' });
-    }
-});
-
-
-// --- WebSocket Server ---
-global.broadcastGameState = (gameId) => {
-    const gameSession = gameSessions[gameId];
-    if (!gameSession) return;
-
-    gameSession.clients.forEach(client => {
-        const engine = gameEngines[gameSession.gameType];
-        const stateForPlayer = engine.getStateForPlayer(gameSession, client.walletAddress);
-
-        if (stateForPlayer.gameOver) {
-            let winnerId = null;
-            if (gameSession.gameState.winnerId) {
-                const winnerIndex = gameSession.gameState.winnerId - 1;
-                winnerId = client.walletAddress === gameSession.players[winnerIndex].walletAddress ? 1 : 2;
-            }
-            client.send(JSON.stringify({
-                gameOver: true,
-                winnerId: winnerId,
-                forfeited: gameSession.gameState.forfeited,
+    // Notify both players that the match has been found
+    clients.forEach(client => {
+        if (client.walletAddress === lobby.players[0].walletAddress || client.walletAddress === lobby.players[1].walletAddress) {
+            client.ws.send(JSON.stringify({
+                type: 'match_found',
+                gameId,
+                gameType,
+                betAmount: lobby.betAmount,
             }));
-        } else {
-             // Attach sound events and clear them
-            if (gameSession.gameState.soundEvents && gameSession.gameState.soundEvents.length > 0) {
-                stateForPlayer.soundEvents = [...gameSession.gameState.soundEvents];
-                gameSession.gameState.soundEvents = [];
-            }
-            client.send(JSON.stringify(stateForPlayer));
         }
     });
-};
 
-const gameLoop = () => {
-    for (const gameId in gameSessions) {
-        const session = gameSessions[gameId];
-        if (session.isRealTime && session.clients.size === 2) {
-            const engine = gameEngines[session.gameType];
-            if (engine.update) {
-                engine.update(session);
-                broadcastGameState(gameId);
-            }
-        }
+    delete lobbies[gameType][lobbyId];
+    broadcastLobbyUpdate(gameType);
+    res.status(200).json({ gameId, message: 'Game starting' });
+});
+
+// LOBBY: Cancel a lobby you created
+app.post('/api/lobbies/cancel', (req, res) => {
+    const { lobbyId, gameType, walletAddress } = req.body;
+    const lobby = lobbies[gameType]?.[lobbyId];
+    if (lobby && lobby.creator.walletAddress === walletAddress) {
+        delete lobbies[gameType][lobbyId];
+        console.log(`[Lobby Canceled] ID: ${lobbyId}`);
+        broadcastLobbyUpdate(gameType);
+        res.status(200).json({ message: 'Lobby canceled' });
+    } else {
+        res.status(404).json({ error: 'Lobby not found or you are not the creator' });
     }
-};
+});
 
-setInterval(gameLoop, 1000 / 60); // 60 FPS game loop
 
+// BOT MATCH: Create an instant match against an AI
+app.post('/api/bots/create-match', (req, res) => {
+    const { gameType, betAmount, player } = req.body;
+    if (!gameEngines[gameType]) {
+        return res.status(400).json({ error: 'Invalid game type' });
+    }
+
+    const botPlayer = { walletAddress: `bot_${uuidv4()}`, nickname: 'BOT', isBot: true };
+
+    const gameId = uuidv4();
+    const gameEngine = new gameEngines[gameType]();
+    activeGames[gameId] = {
+        engine: gameEngine,
+        players: [
+            { ...player, id: 1 },
+            { ...botPlayer, id: 2 }
+        ],
+        gameId,
+        gameType,
+        betAmount,
+        subscribers: new Set(),
+    };
+    gameEngine.init(activeGames[gameId].players);
+    console.log(`[Bot Match Created] Game: ${gameType}, ID: ${gameId}`);
+    res.status(201).json({ gameId });
+});
+
+
+// --- WebSocket Server Logic ---
 wss.on('connection', (ws) => {
-    console.log('Client connected');
+    const clientId = uuidv4();
+    clients.set(clientId, { ws });
+
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
+            const clientInfo = clients.get(clientId);
 
-            // --- Game Logic ---
-            if (data.type === 'join_game') {
-                const { gameId, walletAddress, gameType } = data;
-                const gameSession = gameSessions[gameId];
-                if (gameSession && gameSession.gameType === gameType) {
-                    ws.walletAddress = walletAddress;
-                    gameSession.clients.add(ws);
-                    console.log(`${walletAddress} joined game ${gameId}`);
-                    
-                    if (gameSession.clients.size === 2) {
-                        const engine = gameEngines[gameType];
-                        engine.start(gameSession);
-                        if (!gameSession.isRealTime) {
-                            broadcastGameState(gameId);
-                        }
+            switch (data.type) {
+                case 'join_game':
+                    clientInfo.walletAddress = data.walletAddress;
+                    const game = activeGames[data.gameId];
+                    if (game) {
+                        game.subscribers.add(ws);
+                        clientInfo.gameId = data.gameId;
+                        broadcastGameState(data.gameId);
                     }
-                }
-            } else if (ws.walletAddress) {
-                const gameSession = Object.values(gameSessions).find(gs => gs.clients.has(ws));
-                if (gameSession) {
-                    const engine = gameEngines[gameSession.gameType];
-                    engine.handleInput(gameSession, ws.walletAddress, data);
-                     if (!gameSession.isRealTime) {
-                         broadcastGameState(gameSession.gameId);
-                     }
-                }
-            }
+                    break;
 
+                // Game-specific actions
+                case 'move_paddle':
+                case 'stop_paddle':
+                case 'keydown':
+                case 'keyup':
+                case 'play_choice':
+                case 'move': // For Chess
+                    handleGameAction(clientInfo, data);
+                    break;
+            }
         } catch (error) {
-            console.error('Failed to parse message or handle client input:', error);
+            console.error('Failed to parse message or handle action:', error);
         }
     });
 
     ws.on('close', () => {
-        console.log('Client disconnected');
-        const gameSession = Object.values(gameSessions).find(gs => gs.clients.has(ws));
-        if (gameSession && !gameSession.gameState.gameOver) {
-            console.log(`${ws.walletAddress} disconnected from game ${gameSession.gameId}, initiating forfeit.`);
-            gameSession.gameState.forfeited = true;
-            gameSession.gameState.gameOver = true;
-            
-            // The player who did NOT disconnect is the winner.
-            const winnerIndex = gameSession.players.findIndex(p => p.walletAddress !== ws.walletAddress);
-            gameSession.gameState.winnerId = winnerIndex + 1; // winnerId is 1 or 2
-            
-            broadcastGameState(gameSession.gameId);
+        const clientInfo = clients.get(clientId);
+        if (clientInfo && clientInfo.gameId) {
+            const game = activeGames[clientInfo.gameId];
+            if (game) {
+                game.subscribers.delete(ws);
+                // Forfeit logic
+                if (game.engine && !game.engine.isGameOver()) {
+                    const forfeitingPlayer = game.players.find(p => p.walletAddress === clientInfo.walletAddress);
+                    const winner = game.players.find(p => p.walletAddress !== clientInfo.walletAddress);
+                    if (forfeitingPlayer && winner) {
+                        console.log(`[Forfeit] Player ${forfeitingPlayer.nickname} disconnected. ${winner.nickname} wins.`);
+                        game.engine.forfeit(forfeitingPlayer.id);
+                        broadcastGameState(clientInfo.gameId, true);
+                    }
+                }
+            }
         }
+        clients.delete(clientId);
     });
 });
 
 
+// --- Helper Functions ---
+
+function handleGameAction(clientInfo, data) {
+    const game = activeGames[clientInfo.gameId];
+    if (game && game.engine) {
+        const player = game.players.find(p => p.walletAddress === clientInfo.walletAddress);
+        if (player) {
+            game.engine.handleInput(player.id, data);
+            
+            // If it's a bot match and now the bot's turn, trigger bot action
+            if (game.engine.isBotTurn && game.engine.isBotTurn()) {
+                 setTimeout(() => {
+                    game.engine.handleBotInput();
+                    broadcastGameState(clientInfo.gameId);
+                }, 500); // Small delay for bot "thinking"
+            }
+            
+            // For real-time games, the broadcast is handled by the game loop
+            if (game.gameType === 'solana-gold-rush' || game.gameType === 'chess') {
+                 broadcastGameState(clientInfo.gameId);
+            }
+        }
+    }
+}
+
+function broadcastGameState(gameId, forfeited = false) {
+    const game = activeGames[gameId];
+    if (!game) return;
+    
+    game.subscribers.forEach(ws => {
+        const player = game.players.find(p => clients.get(findClientId(ws))?.walletAddress === p.walletAddress);
+        if (player) {
+            const state = game.engine.getState(player.id);
+            state.forfeited = forfeited;
+            ws.send(JSON.stringify(state));
+        }
+    });
+
+    // Cleanup finished games
+    if (game.engine.isGameOver()) {
+        console.log(`[Game Over] ID: ${gameId}. Cleaning up.`);
+        // Keep game for a bit for final state retrieval, then delete
+        setTimeout(() => delete activeGames[gameId], 10000);
+    }
+}
+
+function broadcastLobbyUpdate(gameType) {
+    // This would be more efficient with a proper pub/sub system,
+    // but for this scale, we can just notify all clients.
+    const availableLobbies = Object.values(lobbies[gameType]).filter(lobby => lobby.players.length === 1);
+    const payload = JSON.stringify({
+        type: 'lobbies_update',
+        gameType: gameType,
+        lobbies: availableLobbies
+    });
+    // This is a simplified broadcast. A real app would track lobby subscriptions.
+    clients.forEach(client => {
+        client.ws.send(payload);
+    });
+}
+
+function findClientId(ws) {
+    for (let [id, client] of clients.entries()) {
+        if (client.ws === ws) {
+            return id;
+        }
+    }
+}
+
+// Start game loops for real-time games
+setInterval(() => {
+    for (const gameId in activeGames) {
+        const game = activeGames[gameId];
+        if (game.gameType === 'neon-pong' || game.gameType === 'cosmic-dodge') {
+            if (game.engine && !game.engine.isGameOver()) {
+                game.engine.update();
+                broadcastGameState(gameId);
+            }
+        }
+    }
+}, 1000 / 60); // 60 FPS
+
+
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));

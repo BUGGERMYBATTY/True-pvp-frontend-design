@@ -1,189 +1,316 @@
-import React, { useState, useEffect } from 'react';
-import BettingScreen from './BettingScreen.tsx';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Lobby } from '../types';
-import { playSound } from '../utils/audio.ts';
+import { playSound } from '../utils/audio';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
 interface LobbyScreenProps {
-  gameType: string;
-  onLobbyCreated: (lobbyId: string, wager: number) => void;
-  onLobbyJoined: (gameId: string, wager: number) => void;
-  onExitGame: () => void;
-  onShowHowToPlay: () => void;
-  walletAddress: string;
-  nickname: string;
-  balance: number;
-  walletType: 'guest' | 'phantom';
-  colorTheme: 'blue' | 'yellow' | 'pink' | 'purple';
+    walletAddress: string;
+    nickname: string;
+    balance: number;
+    onExitGame: () => void;
+    onShowHowToPlay: () => void;
+    onGameStart: (gameId: string, betAmount: number) => void;
+    gameType: string;
+    gameName: string;
+    colorTheme: 'yellow' | 'blue' | 'pink' | 'purple';
+    walletType: 'guest' | 'phantom';
 }
 
 const LobbyScreen: React.FC<LobbyScreenProps> = ({
-  gameType,
-  onLobbyCreated,
-  onLobbyJoined,
-  onExitGame,
-  onShowHowToPlay,
-  walletAddress,
-  nickname,
-  balance,
-  walletType,
-  colorTheme,
+    walletAddress,
+    nickname,
+    balance,
+    onExitGame,
+    onShowHowToPlay,
+    onGameStart,
+    gameType,
+    gameName,
+    colorTheme,
+    walletType
 }) => {
-  const [showBettingScreen, setShowBettingScreen] = useState(true);
-  const [lobbies, setLobbies] = useState<Lobby[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+    const [lobbies, setLobbies] = useState<Lobby[]>([]);
+    const [betAmount, setBetAmount] = useState(0.01);
+    const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [myLobbyId, setMyLobbyId] = useState<string | null>(null);
+    const [sortBy, setSortBy] = useState<'highest' | 'lowest'>('highest');
 
-  useEffect(() => {
-    if (showBettingScreen) return; // Don't fetch lobbies if we are on the betting screen
+    const fetchLobbies = useCallback(async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/lobbies/list/${gameType}/${walletType}`);
+            if (response.ok) {
+                const data = await response.json();
+                setLobbies(data.lobbies || []);
+            } else {
+                 console.error("Failed to fetch lobbies:", response.statusText);
+            }
+        } catch (err) {
+            console.error("Failed to fetch lobbies:", err);
+        }
+    }, [gameType, walletType]);
 
-    const fetchLobbies = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/lobbies/list/${walletType}`);
-        if (!response.ok) throw new Error('Failed to fetch lobbies');
-        const allLobbies: Lobby[] = await response.json();
-        // Filter lobbies for the current game type and exclude user's own lobbies
-        const filteredLobbies = allLobbies.filter(lobby => 
-            lobby.gameType === gameType && lobby.creator.walletAddress !== walletAddress
-        );
-        setLobbies(filteredLobbies);
-      } catch (err: any) {
-        setError(err.message || 'Could not load lobbies.');
-      } finally {
-        setIsLoading(false);
-      }
+    useEffect(() => {
+        fetchLobbies();
+        const intervalId = setInterval(fetchLobbies, 5000);
+        return () => clearInterval(intervalId);
+    }, [fetchLobbies]);
+    
+     useEffect(() => {
+        const pollMyLobby = async () => {
+            if (!myLobbyId) return;
+            try {
+                // This is a simplified poll. A real app would use WebSockets for instant updates.
+                const response = await fetch(`${API_BASE_URL}/api/lobbies/list/${gameType}/${walletType}`);
+                if(response.ok) {
+                    const data = await response.json();
+                    const myLobbyExists = data.lobbies.some((l: Lobby) => l.lobbyId === myLobbyId);
+                    if(!myLobbyExists && myLobbyId) {
+                        // Our lobby is gone, which means someone joined and the game started.
+                        // The server would ideally push this via WebSocket, but polling is a fallback.
+                        // We rely on the parent component getting a WebSocket message for game start.
+                        // This check is mainly to stop polling if the lobby is gone.
+                        console.log("Lobby joined by opponent.");
+                        setMyLobbyId(null);
+                    }
+                }
+            } catch (err) {
+                 console.error("Error polling lobby status:", err);
+            }
+        };
+        const intervalId = setInterval(pollMyLobby, 3000);
+        return () => clearInterval(intervalId);
+    }, [myLobbyId, gameType, walletType]);
+
+    const handleCreateLobby = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/lobbies/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    gameType,
+                    betAmount,
+                    creator: { walletAddress, nickname },
+                    walletType
+                }),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setMyLobbyId(data.lobbyId);
+                fetchLobbies(); // Refresh list immediately
+            } else {
+                const errData = await response.json();
+                setError(errData.error || 'Failed to create lobby.');
+            }
+        } catch (err) {
+            setError('Network error. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    const handleJoinLobby = async (lobby: Lobby) => {
+        setIsLoading(true);
+        setError(null);
+        try {
+             const response = await fetch(`${API_BASE_URL}/api/lobbies/join`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lobbyId: lobby.lobbyId,
+                    gameType: lobby.gameType,
+                    player: { walletAddress, nickname }
+                }),
+            });
+             if (response.ok) {
+                const data = await response.json();
+                onGameStart(data.gameId, lobby.betAmount);
+            } else {
+                 const errData = await response.json();
+                setError(errData.error || 'Failed to join lobby.');
+            }
+        } catch (err) {
+             setError('Network error. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    fetchLobbies();
-    const intervalId = setInterval(fetchLobbies, 5000); // Refresh every 5 seconds
-
-    return () => clearInterval(intervalId);
-  }, [gameType, walletType, walletAddress, showBettingScreen]);
-
-  const handleCreateLobby = async (amount: number) => {
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/lobbies/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gameType,
-          betAmount: amount,
-          walletAddress,
-          nickname,
-          walletType,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to create lobby.');
-      onLobbyCreated(data.lobbyId, amount);
-    } catch (err: any) {
-      setError(err.message);
+    const handleCancelLobby = async () => {
+         if (!myLobbyId) return;
+        setIsLoading(true);
+        try {
+             await fetch(`${API_BASE_URL}/api/lobbies/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lobbyId: myLobbyId, gameType, walletAddress }),
+            });
+            setMyLobbyId(null);
+            fetchLobbies();
+        } catch (err) {
+             console.error("Failed to cancel lobby:", err);
+        } finally {
+             setIsLoading(false);
+        }
+    };
+    
+    const handleBotMatch = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/bots/create-match`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    gameType,
+                    betAmount,
+                    player: { walletAddress, nickname },
+                }),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                onGameStart(data.gameId, betAmount);
+            } else {
+                setError("Failed to create bot match.");
+            }
+        } catch (err) {
+             setError('Network error. Please try again.');
+        } finally {
+             setIsLoading(false);
+        }
     }
-  };
+    
+    const sortedLobbies = [...lobbies].sort((a, b) => {
+        return sortBy === 'highest' ? b.betAmount - a.betAmount : a.betAmount - b.betAmount;
+    });
 
-  const handleJoinLobby = async (lobby: Lobby) => {
-    playSound('uiClick');
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/lobbies/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lobbyId: lobby.lobbyId,
-          joinerWalletAddress: walletAddress,
-          joinerNickname: nickname,
-          walletType,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to join lobby.');
-      onLobbyJoined(data.gameId, lobby.betAmount);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
+    const theme = {
+        main: colorTheme,
+        light: `${colorTheme}-light`,
+        shadow: `shadow-${colorTheme}/20`,
+        text: `text-${colorTheme}`,
+        border: `border-${colorTheme}`,
+        ring: `focus:ring-${colorTheme}`,
+        gradient: `from-${colorTheme} to-${colorTheme}-dark`,
+    };
 
-  const gameName = gameType.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  
-  const colorClasses = {
-    blue: { text: 'text-blue', border: 'border-blue' },
-    yellow: { text: 'text-yellow', border: 'border-yellow' },
-    pink: { text: 'text-pink', border: 'border-pink' },
-    purple: { text: 'text-purple', border: 'border-purple' },
-  };
-  const theme = colorClasses[colorTheme] || colorClasses.blue;
-
-  return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col items-center">
-      <div className="flex justify-center border-b-2 border-gray-700 mb-6">
-        <button 
-          onClick={() => setShowBettingScreen(true)}
-          className={`px-6 py-3 font-display text-xl font-bold transition-colors ${showBettingScreen ? `${theme.text} border-b-2 ${theme.border}` : 'text-gray-500 border-b-2 border-transparent hover:text-white'}`}
-        >
-          Create Lobby
-        </button>
-        <button 
-          onClick={() => setShowBettingScreen(false)}
-          className={`px-6 py-3 font-display text-xl font-bold transition-colors ${!showBettingScreen ? `${theme.text} border-b-2 ${theme.border}` : 'text-gray-500 border-b-2 border-transparent hover:text-white'}`}
-        >
-          Join Lobby
-        </button>
-      </div>
-      
-      {error && <div className="text-center text-pink p-3 bg-pink/10 rounded-md mb-4 border border-pink/20 w-full max-w-md">{error}</div>}
-
-      {showBettingScreen ? (
-        <BettingScreen
-          onFindOpponent={handleCreateLobby}
-          walletConnected={!!walletAddress}
-          balance={balance}
-          onExitGame={onExitGame}
-          onShowHowToPlay={onShowHowToPlay}
-          gameName={gameName}
-          colorTheme={colorTheme}
-        />
-      ) : (
-        <div className="animate-fadeIn w-full max-w-lg">
-          <h2 className="text-3xl font-bold font-display text-center mb-6">Available Lobbies</h2>
-          {isLoading && <div className="text-center text-lg text-gray-400">Searching for lobbies...</div>}
-          {!isLoading && lobbies.length === 0 && (
-            <div className="text-center text-gray-400 p-8 bg-brand-gray/50 rounded-lg">
-                <p className="text-xl">No available lobbies for {gameName} right now.</p>
-                <p>Why not create one?</p>
+    if (myLobbyId) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full animate-fadeIn text-center w-full max-w-md">
+                <h2 className={`text-4xl font-bold font-display ${theme.text} mb-4`}>Waiting for Opponent...</h2>
+                <p className="text-white text-lg mb-6">
+                    Wagering <span className="font-bold text-white">{betAmount.toFixed(4)}</span> SOL
+                </p>
+                <div className={`w-20 h-20 border-4 border-dashed rounded-full animate-spin ${theme.border} mb-8`}></div>
+                <p className="text-gray-400 mb-8">Your lobby is open. An opponent can join at any moment.</p>
+                <button
+                    onClick={handleCancelLobby}
+                    disabled={isLoading}
+                    className="w-full bg-pink text-brand-dark font-bold py-3 px-8 rounded-lg text-xl hover:bg-pink-light transition-transform transform hover:scale-105 shadow-lg shadow-pink/20 disabled:bg-gray-600"
+                >
+                    {isLoading ? 'Canceling...' : 'Cancel Lobby'}
+                </button>
             </div>
-          )}
-          {!isLoading && lobbies.length > 0 && (
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-              {lobbies.map(lobby => (
-                <div key={lobby.lobbyId} className="flex justify-between items-center bg-brand-gray p-4 rounded-lg border border-gray-700 hover:bg-brand-dark transition-colors">
-                  <div>
-                    <p className="font-bold text-lg text-white">{lobby.creator.nickname}'s Lobby</p>
-                    <p className="text-gray-400">Wager: {lobby.betAmount.toFixed(4)} SOL</p>
-                  </div>
-                  <button
-                    onClick={() => handleJoinLobby(lobby)}
-                    className={`px-6 py-2 font-bold rounded-md transition-colors text-brand-dark bg-${colorTheme} hover:bg-${colorTheme}-light`}
-                  >
-                    Join
-                  </button>
+        )
+    }
+
+    return (
+        <div className={`w-full max-w-3xl animate-fadeIn p-4 sm:p-6 bg-brand-gray/50 border ${theme.border}/50 rounded-2xl`}>
+            <div className="text-center mb-6">
+                <h2 className={`text-5xl font-extrabold font-display ${theme.text}`}>{gameName}</h2>
+                <button onClick={onShowHowToPlay} className="text-gray-400 hover:text-white underline mt-1 transition-colors">
+                    How to Play?
+                </button>
+            </div>
+           
+            <div className="bg-brand-dark/50 p-4 rounded-lg border border-gray-700 mb-6">
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                    <div className="sm:col-span-1">
+                        <label htmlFor="betAmount" className="block text-sm font-medium text-gray-400 mb-1">Bet Amount (SOL)</label>
+                        <input
+                            type="number"
+                            id="betAmount"
+                            value={betAmount}
+                            onChange={(e) => setBetAmount(parseFloat(e.target.value))}
+                            min="0.01"
+                            step="0.01"
+                            className="w-full bg-brand-dark/70 border-2 border-gray-600 rounded-md py-2 px-3 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple transition"
+                        />
+                    </div>
+                    <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2 mt-2 sm:mt-6">
+                         <button
+                            onClick={handleCreateLobby}
+                            disabled={isLoading || betAmount <= 0}
+                            className={`w-full font-bold py-2.5 px-5 rounded-lg text-white transition-all transform hover:scale-105 shadow-lg ${theme.shadow} bg-gradient-to-r ${theme.gradient} disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed`}
+                        >
+                            {isLoading ? 'Creating...' : 'Create Public Game'}
+                        </button>
+                        <button 
+                            onClick={handleBotMatch}
+                            disabled={isLoading || betAmount <= 0}
+                            className={`w-full font-bold py-2.5 px-5 rounded-lg text-white bg-brand-gray border border-gray-600 hover:bg-gray-700 transition-colors disabled:bg-gray-800 disabled:cursor-not-allowed`}
+                            >
+                            Play vs. Bot
+                        </button>
+                    </div>
                 </div>
-              ))}
+                {error && <p className="text-pink text-center mt-3">{error}</p>}
             </div>
-          )}
-           <button
-             onClick={onExitGame}
-             className="mt-6 text-gray-400 hover:text-white transition-colors block mx-auto"
-           >
-             Back to Main Menu
-           </button>
+
+            <div>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-2xl font-bold font-display">Open Games</h3>
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as any)}
+                        className="bg-brand-dark border border-gray-600 rounded-md py-1 px-2 text-gray-300 text-sm focus:outline-none focus:ring-1 focus:ring-purple"
+                    >
+                        <option value="highest">Highest Price</option>
+                        <option value="lowest">Lowest Price</option>
+                    </select>
+                </div>
+
+                <div className="h-64 overflow-y-auto space-y-2 pr-2">
+                    {sortedLobbies.length > 0 ? sortedLobbies.map(lobby => (
+                        <div key={lobby.lobbyId} className={`flex justify-between items-center bg-brand-dark/60 p-3 rounded-lg border border-transparent hover:border-${colorTheme}/50 transition-colors`}>
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-brand-gray flex items-center justify-center font-bold text-sm text-gray-400">
+                                   {lobby.creator.nickname.substring(0,2)}
+                                </div>
+                                <div>
+                                    <p className="font-bold text-white">{lobby.creator.nickname}'s Game</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                               <p className="text-sm text-gray-400">
+                                    <span className="font-mono text-yellow-light text-base">{lobby.betAmount.toFixed(4)} SOL</span>
+                               </p>
+                               <button
+                                    onClick={() => handleJoinLobby(lobby)}
+                                    disabled={isLoading || lobby.creator.walletAddress === walletAddress}
+                                    className={`font-bold py-2 px-4 rounded-md text-brand-dark transition-colors bg-${theme.light} disabled:bg-gray-600 disabled:cursor-not-allowed`}
+                                >
+                                    Join
+                                </button>
+                            </div>
+                        </div>
+                    )) : (
+                        <div className="text-center text-gray-500 py-16">
+                            No open games right now. Why not create one?
+                        </div>
+                    )}
+                </div>
+            </div>
+            <button
+                onClick={onExitGame}
+                className="mt-6 text-gray-400 hover:text-white transition-colors mx-auto block"
+            >
+                Back to Main Menu
+            </button>
         </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default LobbyScreen;

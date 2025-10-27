@@ -1,182 +1,166 @@
-// A turn-based engine for Solana Gold Rush
+class SolanaGoldRushEngine {
+    constructor() {
+        this.players = [];
+        this.round = 0;
+        this.roundNumber = 0;
+        this.roundNumbers = [];
+        this.gameOver = false;
+        this.winnerId = null;
+        this.isDraw = false;
+        this.roundMessage = 'Waiting for players to choose...';
+        this.soundEvents = [];
+    }
 
-const createSolanaGoldRushEngine = () => {
-    // --- Helper Functions ---
-    const shuffleArray = (array) => {
+    init(players) {
+        this.players = players.map(p => ({
+            ...p,
+            nuggets: [1, 2, 3, 4, 5],
+            score: 0,
+            choice: null,
+            isBot: p.isBot || false,
+        }));
+        this.roundNumbers = this.shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).slice(0, 5);
+        this.startNextRound();
+    }
+
+    shuffle(array) {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [array[i], array[j]] = [array[j], array[i]];
         }
         return array;
-    };
+    }
 
-    // --- Engine Methods ---
-    const init = () => {
-        const roundNumbers = shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).slice(0, 5);
-        return {
-            round: 0,
-            roundNumber: null,
-            players: [
-                { id: 1, name: 'Player 1', score: 0, nuggets: [1, 2, 3, 4, 5], choice: null },
-                { id: 2, name: 'Player 2', score: 0, nuggets: [1, 2, 3, 4, 5], choice: null }
-            ],
-            roundWinnerId: null,
-            winnerId: null, // The "true" winner ID (1 or 2)
-            gameOver: false,
-            forfeited: false,
-            availableRoundNumbers: roundNumbers,
-            roundMessage: 'Waiting for players...',
-            turnState: 'waiting', // waiting, choosing, revealing, finished
-        };
-    };
-
-    const start = (gameSession) => {
-        const { gameState, players } = gameSession;
-        gameState.players[0].name = players[0].nickname;
-        gameState.players[1].name = players[1].nickname;
-        gameState.roundMessage = "Game starting...";
-        global.broadcastGameState(gameSession.gameId);
-
-        setTimeout(() => startNextRound(gameSession), 2000);
-    };
-    
-    const startNextRound = (gameSession) => {
-        const { gameState } = gameSession;
-        gameState.round += 1;
-        gameState.roundNumber = gameState.availableRoundNumbers[gameState.round - 1];
-        gameState.players.forEach(p => p.choice = null);
-        gameState.roundWinnerId = null;
-        gameState.roundMessage = `Round ${gameState.round}: Place your bet. Round Value: ${gameState.roundNumber}`;
-        gameState.turnState = 'choosing';
-        global.broadcastGameState(gameSession.gameId);
-    };
-
-    const handleInput = (gameSession, playerWallet, data) => {
-        const { gameState, players } = gameSession;
-        if (gameState.turnState !== 'choosing' || gameState.gameOver) return;
-
-        const playerIndex = players.findIndex(p => p.walletAddress === playerWallet);
-        if (playerIndex === -1) return;
-
-        if (data.type === 'play_choice' && gameState.players[playerIndex].nuggets.includes(data.choice)) {
-            gameState.players[playerIndex].choice = data.choice;
-            
-            const bothPlayersChosen = gameState.players.every(p => p.choice !== null);
-            if (bothPlayersChosen) {
-                processRound(gameSession);
-            } else {
-                global.broadcastGameState(gameSession.gameId);
-            }
+    startNextRound() {
+        this.round++;
+        if (this.round > 5) {
+            this.endGame();
+            return;
         }
-    };
+        this.roundNumber = this.roundNumbers[this.round - 1];
+        this.players.forEach(p => p.choice = null);
+        this.roundMessage = 'Choose your nugget!';
+        this.soundEvents.push('roundStart');
+        
+        // If a bot needs to play in this round, handle its input
+        if (this.isBotTurn()) {
+            this.handleBotInput();
+        }
+    }
 
-    const processRound = (gameSession) => {
-        const { gameState } = gameSession;
-        gameState.turnState = 'revealing';
-        gameState.roundMessage = 'Revealing choices...';
-        global.broadcastGameState(gameSession.gameId);
+    handleInput(playerId, data) {
+        const player = this.players.find(p => p.id === playerId);
+        if (player && player.choice === null && player.nuggets.includes(data.choice)) {
+            player.choice = data.choice;
+            player.nuggets = player.nuggets.filter(n => n !== data.choice);
+            
+            this.roundMessage = `${player.nickname} has chosen.`;
 
-        setTimeout(() => {
-            const player1 = gameState.players[0];
-            const player2 = gameState.players[1];
-            const roundValue = gameState.roundNumber || 0;
-
-            // Remove used nuggets
-            player1.nuggets = player1.nuggets.filter(n => n !== player1.choice);
-            player2.nuggets = player2.nuggets.filter(n => n !== player2.choice);
-
-            let roundWinnerId = null;
-            let roundMessage = '';
-
-            if (player1.choice > player2.choice) {
-                roundWinnerId = 1;
-                const points = roundValue + player1.choice + player2.choice;
-                player1.score += points;
-                roundMessage = `${player1.name} wins the round! +${points} points.`;
-            } else if (player2.choice > player1.choice) {
-                roundWinnerId = 2;
-                const points = roundValue + player1.choice + player2.choice;
-                player2.score += points;
-                roundMessage = `${player2.name} wins the round. +${points} points.`;
+            if (this.players.every(p => p.choice !== null)) {
+                this.processRound();
             } else {
-                roundWinnerId = null; // Draw
-                roundMessage = "It's a draw! No points awarded.";
-            }
-            
-            gameState.roundWinnerId = roundWinnerId;
-            gameState.roundMessage = roundMessage;
-            global.broadcastGameState(gameSession.gameId);
-            
-            setTimeout(() => {
-                if (gameState.round >= 5) {
-                    endGame(gameSession);
-                } else {
-                    startNextRound(gameSession);
+                 // If the other player is a bot, make it play now
+                const otherPlayer = this.players.find(p => p.id !== playerId);
+                if(otherPlayer.isBot) {
+                    this.handleBotInput();
                 }
-            }, 3000);
+            }
+        }
+    }
+    
+    isBotTurn() {
+        // In this game, bots can play at the same time as players.
+        // We'll check if there's any bot that hasn't made a choice yet.
+        return this.players.some(p => p.isBot && p.choice === null);
+    }
+    
+    handleBotInput() {
+        const bot = this.players.find(p => p.isBot && p.choice === null);
+        if (bot) {
+            // Simple AI: play a random available nugget
+            const randomNugget = bot.nuggets[Math.floor(Math.random() * bot.nuggets.length)];
+            this.handleInput(bot.id, { choice: randomNugget });
+        }
+    }
 
-        }, 1500); // Wait 1.5s to show opponent choice
-    };
+    processRound() {
+        const [p1, p2] = this.players;
+        let roundWinner = null;
 
-    const endGame = (gameSession) => {
-        const { gameState } = gameSession;
-        const player1 = gameState.players[0];
-        const player2 = gameState.players[1];
+        if (p1.choice > p2.choice) {
+            roundWinner = p1;
+        } else if (p2.choice > p1.choice) {
+            roundWinner = p2;
+        }
 
-        if (player1.score > player2.score) {
-            gameState.winnerId = 1;
-        } else if (player2.score > player1.score) {
-            gameState.winnerId = 2;
+        if (roundWinner) {
+            const scoreToAdd = this.roundNumber + p1.choice + p2.choice;
+            roundWinner.score += scoreToAdd;
+            this.roundMessage = `${roundWinner.nickname} wins the round and gets ${scoreToAdd} points!`;
+            this.soundEvents.push('score');
         } else {
-            gameState.winnerId = null; // Draw
+            this.roundMessage = "It's a draw! No points awarded.";
+            this.soundEvents.push('draw');
         }
-        
-        gameState.gameOver = true;
-        gameState.turnState = 'finished';
-        gameState.roundMessage = 'Game Over!';
-        global.broadcastGameState(gameSession.gameId);
-    };
 
-    const getStateForPlayer = (gameSession, playerWallet) => {
-        const { gameState, players } = gameSession;
-        const playerIndex = players.findIndex(p => p.walletAddress === playerWallet);
-        const opponentIndex = playerIndex === 0 ? 1 : 0;
-        
-        const you = gameState.players[playerIndex];
-        const opponent = gameState.players[opponentIndex];
-        
-        if (gameState.gameOver) {
-            // The `winnerId` transformation happens in server.js `broadcastGameState`
-            return {
-                gameOver: true,
-                you: { name: you.name, score: you.score, choice: you.choice },
-                opponent: { name: opponent.name, score: opponent.score, choice: opponent.choice },
-                roundMessage: gameState.roundMessage,
-            };
+        setTimeout(() => this.startNextRound(), 3000); // Wait 3 seconds before next round
+    }
+
+    endGame() {
+        this.gameOver = true;
+        const [p1, p2] = this.players;
+        if (p1.score > p2.score) {
+            this.winnerId = p1.id;
+            this.roundMessage = `${p1.nickname} wins the game!`;
+        } else if (p2.score > p1.score) {
+            this.winnerId = p2.id;
+             this.roundMessage = `${p2.nickname} wins the game!`;
+        } else {
+            this.winnerId = null; // Draw
+            this.isDraw = true;
+             this.roundMessage = "The game is a draw!";
         }
+    }
+
+    forfeit(playerId) {
+        this.gameOver = true;
+        const winner = this.players.find(p => p.id !== playerId);
+        this.winnerId = winner.id;
+    }
+    
+    isGameOver() {
+        return this.gameOver;
+    }
+
+    getState(playerId) {
+        const player = this.players.find(p => p.id === playerId);
+        const opponent = this.players.find(p => p.id !== playerId);
+        
+        const showOpponentChoice = this.players.every(p => p.choice !== null);
 
         return {
-            round: gameState.round,
-            roundNumber: gameState.roundNumber,
-            roundMessage: gameState.roundMessage,
+            round: this.round,
+            roundNumber: this.roundNumber,
+            roundMessage: this.roundMessage,
             you: {
-                name: you.name,
-                score: you.score,
-                nuggets: you.nuggets,
-                choice: you.choice,
+                name: player.nickname,
+                score: player.score,
+                nuggets: player.nuggets,
+                choice: player.choice,
             },
             opponent: {
-                name: opponent.name,
+                name: opponent.nickname,
                 score: opponent.score,
-                // Only show opponent's choice during the 'revealing' or 'finished' phase
-                choice: (gameState.turnState === 'revealing' || gameState.turnState === 'finished') ? opponent.choice : (opponent.choice !== null ? 'Chosen' : null),
+                choice: showOpponentChoice ? opponent.choice : (opponent.choice ? 'Chosen' : null),
             },
-            isPlayerTurn: gameState.turnState === 'choosing' && you.choice === null,
-            showOpponentChoice: gameState.turnState === 'revealing' || gameState.turnState === 'finished',
+            isPlayerTurn: player.choice === null,
+            showOpponentChoice,
+            gameOver: this.gameOver,
+            winnerId: this.winnerId,
+            isDraw: this.isDraw,
+            soundEvents: [...this.soundEvents],
         };
-    };
+    }
+}
 
-    return { init, start, handleInput, getStateForPlayer };
-};
-
-module.exports = createSolanaGoldRushEngine;
+module.exports = SolanaGoldRushEngine;

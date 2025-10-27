@@ -1,208 +1,267 @@
-// --- Server-Authoritative Game Engine for Cosmic Dodge ---
+const ARENA_WIDTH = 350;
+const ARENA_HEIGHT = 450;
+const SHIP_SIZE = 20;
+const SHIP_SPEED = 4;
+const ROUNDS_TO_WIN_MATCH = 3;
 
-const createCosmicDodgeEngine = () => {
-    // --- Game Constants ---
-    const ARENA_WIDTH = 350;
-    const ARENA_HEIGHT = 450;
-    const SHIP_SIZE = 20;
-    const SHIP_SPEED = 4;
-    const WINNING_ROUNDS = 3;
+class CosmicDodgeEngine {
+    constructor() {
+        this.players = [];
+        this.projectiles = [];
+        this.nextProjectileId = 0;
+        this.gameOver = false;
+        this.winnerId = null;
+        this.isDraw = false;
+        this.countdown = null;
+        this.message = '';
+        this.gameTime = 0;
+        this.spawnTimer = 0;
+        this.soundEvents = [];
+    }
 
-    // --- Engine Methods ---
-    const init = () => ({
-        p1: { ship: { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT - 50, alive: true, keys: {} }, roundsWon: 0, nickname: 'Player 1', explosions: [] },
-        p2: { ship: { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT - 50, alive: true, keys: {} }, roundsWon: 0, nickname: 'Player 2', explosions: [] },
-        projectiles: [],
-        roundTimer: 0,
-        wave: 1,
-        countdown: 3,
-        message: 'Waiting for opponent...',
-        winnerId: null,
-        gameOver: false,
-        forfeited: false,
-        countdownInterval: null,
-        soundEvents: [],
-    });
+    init(players) {
+        this.players = players.map((p, index) => ({
+            ...p,
+            id: index + 1,
+            ship: {
+                x: ARENA_WIDTH / 2 - SHIP_SIZE / 2,
+                y: ARENA_HEIGHT - SHIP_SIZE - 20,
+                alive: true,
+            },
+            keys: { w: false, a: false, s: false, d: false },
+            roundsWon: 0,
+            explosions: [],
+             isBot: p.isBot || false,
+        }));
+        this.startRound();
+    }
     
-    const resetRound = (gameState) => {
-        gameState.p1.ship = { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT - 50, alive: true, keys: {} };
-        gameState.p2.ship = { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT - 50, alive: true, keys: {} };
-        gameState.projectiles = [];
-        gameState.p1.explosions = [];
-        gameState.p2.explosions = [];
-        gameState.roundTimer = 0;
-        gameState.wave = 1;
-    };
-
-    const startCountdown = (gameSession, newRound = false) => {
-        const { gameState } = gameSession;
-        if (gameState.countdownInterval) clearInterval(gameState.countdownInterval);
+    startRound() {
+        this.gameTime = 0;
+        this.spawnTimer = 0;
+        this.projectiles = [];
+        this.players.forEach(p => {
+            p.ship.x = ARENA_WIDTH / 2 - SHIP_SIZE / 2;
+            p.ship.y = ARENA_HEIGHT - SHIP_SIZE - 20;
+            p.ship.alive = true;
+            p.explosions = [];
+        });
         
-        if (newRound) {
-            resetRound(gameState);
-            gameState.message = `Round ${gameState.p1.roundsWon + gameState.p2.roundsWon + 1}`;
-            gameState.soundEvents.push('roundStart');
-        }
-
-        gameState.countdownInterval = setInterval(() => {
-            gameState.countdown--;
-            if (gameState.countdown <= 0) {
-                clearInterval(gameState.countdownInterval);
-                gameState.countdownInterval = null;
-                gameState.countdown = null;
-                gameState.message = '';
+        this.message = '';
+        this.countdown = 3;
+        this.soundEvents.push('roundStart');
+        const interval = setInterval(() => {
+            this.countdown--;
+             if (this.countdown > 0) {
+                this.soundEvents.push('roundStart');
+             }
+            if (this.countdown <= 0) {
+                this.countdown = null;
+                clearInterval(interval);
             }
-            // Broadcasting happens in the main loop
         }, 1000);
-    };
+    }
 
-    const start = (gameSession) => {
-        const { gameState, players } = gameSession;
-        gameState.p1.nickname = players[0].nickname;
-        gameState.p2.nickname = players[1].nickname;
-        gameState.message = `Round 1`;
-        gameState.soundEvents.push('roundStart');
-        startCountdown(gameSession);
-    };
-
-    const handleInput = (gameSession, playerWallet, data) => {
-        const { gameState, players } = gameSession;
-        if (gameState.gameOver) return;
-
-        const playerIndex = players.findIndex(p => p.walletAddress === playerWallet);
-        const playerKey = playerIndex === 0 ? 'p1' : 'p2';
-        
-        if (data.type === 'keydown') {
-            gameState[playerKey].ship.keys[data.key] = true;
-        } else if (data.type === 'keyup') {
-            gameState[playerKey].ship.keys[data.key] = false;
+    handleInput(playerId, data) {
+        const player = this.players.find(p => p.id === playerId);
+        if (player) {
+            if (data.type === 'keydown') player.keys[data.key] = true;
+            if (data.type === 'keyup') player.keys[data.key] = false;
         }
-    };
-    
-    // --- Projectile Spawner ---
-    const spawnProjectiles = (gameState) => {
-        const { roundTimer, wave, projectiles } = gameState;
-        
-        // Wave 1: Simple vertical asteroids
-        if (wave === 1 && roundTimer % 60 === 0) {
-            projectiles.push({ id: Math.random(), type: 'asteroid', x: Math.random() * ARENA_WIDTH, y: -20, size: 20 + Math.random() * 20, vy: 2 + Math.random() * 2, rotation: 0 });
-        }
-        
-        // Wave 2: Add horizontal lasers
-        if (wave >= 2 && roundTimer % 120 === 50) {
-             projectiles.push({ id: Math.random(), type: 'laser', x: -100, y: Math.random() * (ARENA_HEIGHT / 2), size: 100, vx: 5, rotation: 0 });
-        }
-        if (wave >= 2 && roundTimer % 120 === 110) {
-             projectiles.push({ id: Math.random(), type: 'laser', x: ARENA_WIDTH, y: Math.random() * (ARENA_HEIGHT / 2), size: 100, vx: -5, rotation: 0 });
-        }
+    }
 
-        // Increase wave number over time
-        if (roundTimer > 15 * 60 && wave === 1) gameState.wave = 2;
-        if (roundTimer > 30 * 60 && wave === 2) gameState.wave = 3; // Add more waves later
-    };
+    update() {
+        if (this.gameOver || this.countdown) return;
 
-    const update = (gameSession) => {
-        const { gameState } = gameSession;
-        if (gameState.gameOver || gameState.countdown) return;
+        this.gameTime++;
+        this.spawnTimer++;
         
-        gameState.roundTimer++;
-        
-        // Move ships
-        ['p1', 'p2'].forEach(pKey => {
-            const ship = gameState[pKey].ship;
-            if (!ship.alive) return;
-            if (ship.keys['w']) ship.y -= SHIP_SPEED;
-            if (ship.keys['s']) ship.y += SHIP_SPEED;
-            if (ship.keys['a']) ship.x -= SHIP_SPEED;
-            if (ship.keys['d']) ship.x += SHIP_SPEED;
-            ship.x = Math.max(0, Math.min(ship.x, ARENA_WIDTH - SHIP_SIZE));
-            ship.y = Math.max(0, Math.min(ship.y, ARENA_HEIGHT - SHIP_SIZE));
+        // --- Move Ships ---
+        this.players.forEach(player => {
+            if (!player.ship.alive) return;
+            
+             if (player.isBot) {
+                this.handleBotInput(player);
+            }
+
+            if (player.keys.w) player.ship.y -= SHIP_SPEED;
+            if (player.keys.s) player.ship.y += SHIP_SPEED;
+            if (player.keys.a) player.ship.x -= SHIP_SPEED;
+            if (player.keys.d) player.ship.x += SHIP_SPEED;
+
+            // Boundary checks
+            player.ship.x = Math.max(0, Math.min(ARENA_WIDTH - SHIP_SIZE, player.ship.x));
+            player.ship.y = Math.max(0, Math.min(ARENA_HEIGHT - SHIP_SIZE, player.ship.y));
+            
+             // Update explosions
+            player.explosions = player.explosions.filter(exp => {
+                exp.life--;
+                exp.size += 0.5;
+                return exp.life > 0;
+            });
         });
 
-        // Spawn and move projectiles
-        spawnProjectiles(gameState);
-        gameState.projectiles.forEach(p => {
-            p.y += p.vy || 0;
-            p.x += p.vx || 0;
-        });
-        gameState.projectiles = gameState.projectiles.filter(p => p.y < ARENA_HEIGHT + 20 && p.x > -110 && p.x < ARENA_WIDTH + 10);
-        
-        // Update explosions
-        ['p1', 'p2'].forEach(pKey => {
-            gameState[pKey].explosions.forEach(exp => exp.life--);
-            gameState[pKey].explosions = gameState[pKey].explosions.filter(exp => exp.life > 0);
-        });
+        // --- Spawn Projectiles ---
+        this.spawnProjectiles();
 
-        // Collision detection
-        let roundOver = false;
-        ['p1', 'p2'].forEach(pKey => {
-            const ship = gameState[pKey].ship;
-            if (!ship.alive) return;
-            for (const p of gameState.projectiles) {
-                const pHeight = p.type === 'laser' ? 5 : p.size;
-                if (ship.x < p.x + p.size && ship.x + SHIP_SIZE > p.x &&
-                    ship.y < p.y + pHeight && ship.y + SHIP_SIZE > p.y) {
-                    ship.alive = false;
-                    roundOver = true;
-                    gameState.soundEvents.push('explosion');
-                    // Create explosion
-                    gameState[pKey].explosions.push({id: Math.random(), x: ship.x, y: ship.y, size: 40, life: 60 });
+        // --- Move Projectiles & Check Collisions ---
+        this.projectiles.forEach(p => {
+            p.x += p.dx;
+            p.y += p.dy;
+        });
+        
+        this.projectiles = this.projectiles.filter(p => p.x > -50 && p.x < ARENA_WIDTH + 50 && p.y > -50 && p.y < ARENA_HEIGHT + 50);
+
+        this.players.forEach(player => {
+            if (player.ship.alive) {
+                for (const proj of this.projectiles) {
+                    if (this.isColliding(player.ship, proj)) {
+                        player.ship.alive = false;
+                        this.createExplosion(player, player.ship.x, player.ship.y);
+                        this.soundEvents.push('explosion');
+                        break;
+                    }
                 }
             }
         });
+        
+        // --- Check for Round End ---
+        const alivePlayers = this.players.filter(p => p.ship.alive);
+        if (alivePlayers.length <= 1) {
+            this.endRound(alivePlayers[0] || null);
+        }
+    }
+    
+    handleBotInput(bot) {
+        if (!bot.ship.alive || this.projectiles.length === 0) return;
 
-        if (roundOver) {
-            const p1Alive = gameState.p1.ship.alive;
-            const p2Alive = gameState.p2.ship.alive;
-            if (p1Alive && !p2Alive) {
-                gameState.p1.roundsWon++;
-                gameState.soundEvents.push('roundWin');
-            }
-            if (!p1Alive && p2Alive) {
-                gameState.p2.roundsWon++;
-                gameState.soundEvents.push('roundWin');
-            }
-            // if both die on same frame, it's a draw for the round
+        // Simple AI: find nearest projectile and move away from it
+        let nearestProj = null;
+        let minDistance = Infinity;
 
-            if (gameState.p1.roundsWon >= WINNING_ROUNDS || gameState.p2.roundsWon >= WINNING_ROUNDS) {
-                gameState.gameOver = true;
-                gameState.winnerId = gameState.p1.roundsWon > gameState.p2.roundsWon ? 1 : 2;
-            } else {
-                gameState.countdown = 3;
-                startCountdown(gameSession, true);
+        for (const proj of this.projectiles) {
+            const dx = proj.x - bot.ship.x;
+            const dy = proj.y - bot.ship.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearestProj = proj;
             }
         }
-    };
-    
-    const getStateForPlayer = (gameSession, playerWallet) => {
-        const { gameState, players } = gameSession;
-        const playerIndex = players.findIndex(p => p.walletAddress === playerWallet);
-        const isP1 = playerIndex === 0;
-
-        const you = isP1 ? gameState.p1 : gameState.p2;
-        const opponent = isP1 ? gameState.p2 : gameState.p1;
         
+        bot.keys = { w: false, a: false, s: false, d: false }; // Reset keys
+
+        if (nearestProj && minDistance < 100) { // Only react if close
+            const dodgeSpeed = SHIP_SPEED * 0.9;
+             if (bot.ship.x < nearestProj.x) {
+                bot.ship.x -= dodgeSpeed;
+            } else {
+                bot.ship.x += dodgeSpeed;
+            }
+             if (bot.ship.y < nearestProj.y) {
+                bot.ship.y -= dodgeSpeed;
+            } else {
+                bot.ship.y += dodgeSpeed;
+            }
+        }
+    }
+
+    spawnProjectiles() {
+        // Spawn patterns based on game time
+        if (this.spawnTimer % 60 === 0) { // Asteroid from top
+            this.projectiles.push({
+                id: this.nextProjectileId++, type: 'asteroid',
+                x: Math.random() * ARENA_WIDTH, y: -20,
+                dx: (Math.random() - 0.5) * 2, dy: 2 + (this.gameTime / 300),
+                size: Math.random() * 15 + 10,
+            });
+        }
+        if (this.gameTime > 300 && this.spawnTimer % 120 === 0) { // Laser from side
+            const fromLeft = Math.random() > 0.5;
+            this.projectiles.push({
+                id: this.nextProjectileId++, type: 'laser',
+                x: fromLeft ? -50 : ARENA_WIDTH, y: Math.random() * (ARENA_HEIGHT - 100),
+                dx: (fromLeft ? 4 : -4) + (this.gameTime / 500) * (fromLeft ? 1 : -1), dy: 0,
+                size: 50, rotation: 0,
+            });
+        }
+    }
+    
+    createExplosion(player, x, y) {
+        for(let i=0; i<15; i++) {
+             player.explosions.push({
+                 id: Math.random(),
+                 x: x + (Math.random() - 0.5) * 20,
+                 y: y + (Math.random() - 0.5) * 20,
+                 size: Math.random() * 10 + 5,
+                 life: 30
+             });
+        }
+    }
+
+    isColliding(ship, projectile) {
+        return ship.x < projectile.x + projectile.size &&
+               ship.x + SHIP_SIZE > projectile.x &&
+               ship.y < projectile.y + projectile.size &&
+               ship.y + SHIP_SIZE > projectile.y;
+    }
+
+    endRound(winner) {
+        if (winner) {
+            winner.roundsWon++;
+            this.message = `${winner.nickname} wins the round!`;
+            this.soundEvents.push('roundWin');
+            if (winner.roundsWon >= ROUNDS_TO_WIN_MATCH) {
+                this.endGame(winner.id);
+            } else {
+                setTimeout(() => this.startRound(), 3000);
+            }
+        } else { // Draw
+            this.message = "Round Draw!";
+            this.soundEvents.push('draw');
+            setTimeout(() => this.startRound(), 3000);
+        }
+    }
+    
+    endGame(winnerId) {
+        this.gameOver = true;
+        this.winnerId = winnerId;
+    }
+    
+    forfeit(playerId) {
+        this.gameOver = true;
+        const winner = this.players.find(p => p.id !== playerId);
+        this.winnerId = winner.id;
+    }
+
+    isGameOver() {
+        return this.gameOver;
+    }
+
+    getState(playerId) {
+        const player = this.players.find(p => p.id === playerId);
+        const opponent = this.players.find(p => p.id !== playerId);
         return {
             you: {
-                ship: you.ship,
-                roundsWon: you.roundsWon,
-                nickname: you.nickname,
-                explosions: you.explosions,
+                ship: player.ship,
+                roundsWon: player.roundsWon,
+                nickname: player.nickname,
+                explosions: player.explosions,
             },
             opponent: {
                 ship: opponent.ship,
                 roundsWon: opponent.roundsWon,
                 nickname: opponent.nickname,
-                explosions: opponent.explosions
+                 explosions: opponent.explosions,
             },
-            projectiles: gameState.projectiles,
-            countdown: gameState.countdown,
-            message: gameState.message,
-            gameOver: gameState.gameOver,
+            projectiles: this.projectiles,
+            countdown: this.countdown,
+            message: this.message,
+            gameOver: this.gameOver,
+            winnerId: this.winnerId,
+            soundEvents: [...this.soundEvents],
         };
-    };
+    }
+}
 
-    return { init, start, handleInput, update, getStateForPlayer };
-};
-
-module.exports = createCosmicDodgeEngine;
+module.exports = CosmicDodgeEngine;
