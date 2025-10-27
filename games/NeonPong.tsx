@@ -1,127 +1,118 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { Screen, BET_AMOUNTS } from '../types.ts';
 import BettingScreen from '../components/BettingScreen.tsx';
+import MatchingScreen from '../components/MatchingScreen.tsx';
 import PongGameScreen from '../components/PongGameScreen.tsx';
 import WinnerScreen from '../components/WinnerScreen.tsx';
 import HowToPlayModal from '../components/HowToPlayModal.tsx';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
-// FIX: Add missing properties to the component's props interface to match what's passed in App.tsx.
 interface NeonPongProps {
   walletAddress: string;
+  nickname: string;
   balance: number;
   onExitGame: () => void;
-  onBalanceUpdate: (amount: number) => void;
   onRequestMatch: (gameId: string, betAmount: number) => Promise<{ matched: boolean; gameId: string | null } | null>;
   onCancelMatch: (gameId: string, betAmount: number) => void;
+  refetchBalance: () => void;
   provider: any;
   connection: any;
-  refetchBalance: () => void;
-  // FIX: Added missing isDemoMode prop to satisfy the component's signature in App.tsx.
   isDemoMode: boolean;
 }
 
 const NeonPong: React.FC<NeonPongProps> = ({
   walletAddress,
+  nickname,
   balance,
   onExitGame,
-  onBalanceUpdate,
   onRequestMatch,
   onCancelMatch,
+  refetchBalance,
 }) => {
   const [screen, setScreen] = useState<Screen>(Screen.Betting);
   const [betAmount, setBetAmount] = useState<number>(BET_AMOUNTS[0]);
-  const [gameWinnerId, setGameWinnerId] = useState<number | null>(null);
+  const [gameResult, setGameResult] = useState<{ winnerId: number | null, forfeited: boolean }>({ winnerId: null, forfeited: false });
   const [showHowToPlay, setShowHowToPlay] = useState(false);
-  const [forfeited, setForfeited] = useState(false);
+  const [gameId, setGameId] = useState<string | null>(null);
 
   const handleFindOpponent = useCallback(async (amount: number) => {
-    const fee = amount * 0.015;
-    const totalCost = amount + fee;
-
-    if (balance < totalCost) {
-      alert('Insufficient balance to cover wager and fee.');
+    if (balance < amount) {
+      alert('Insufficient balance.');
       return;
     }
-
-    onBalanceUpdate(-totalCost);
     setBetAmount(amount);
     setScreen(Screen.Matching);
-    
     const matchResult = await onRequestMatch('neon-pong', amount);
-    if (matchResult?.matched) {
+    if (matchResult?.matched && matchResult.gameId) {
+      setGameId(matchResult.gameId);
       setScreen(Screen.Game);
     } else if (matchResult === null) {
-      onBalanceUpdate(totalCost);
       setScreen(Screen.Betting);
     }
-  }, [balance, onRequestMatch, onBalanceUpdate]);
+  }, [balance, onRequestMatch]);
 
   useEffect(() => {
-    if (screen !== Screen.Matching) return;
-    const matchKey = `neon-pong-${betAmount}`;
+    if (screen !== Screen.Matching || gameId) return;
     const intervalId = setInterval(async () => {
        try {
         const response = await fetch(`${API_BASE_URL}/api/matchmaking/status/${walletAddress}`);
         const data = await response.json();
-        if (data.status === 'matched') {
+        if (data.status === 'matched' && data.gameId) {
           clearInterval(intervalId);
+          setGameId(data.gameId);
           setScreen(Screen.Game);
         }
       } catch (error) { console.error("Error polling for match status:", error); }
     }, 2000);
     return () => clearInterval(intervalId);
-  }, [screen, betAmount, walletAddress]);
+  }, [screen, betAmount, walletAddress, gameId]);
 
-  const handleGameOver = useCallback((winnerId: number | null) => {
-    setForfeited(false);
-    setGameWinnerId(winnerId);
-    if (winnerId === 1) {
-      onBalanceUpdate(betAmount * 2);
-    } else if (winnerId === null) {
-      onBalanceUpdate(betAmount);
-    }
+  const handleGameOver = useCallback((winnerId: number | null, forfeited = false) => {
+    setGameResult({ winnerId, forfeited });
     setScreen(Screen.Winner);
-  }, [betAmount, onBalanceUpdate]);
+    refetchBalance();
+  }, [refetchBalance]);
 
   const handlePlayAgain = useCallback(() => {
-    setGameWinnerId(null);
-    setForfeited(false);
+    setGameResult({ winnerId: null, forfeited: false });
+    setGameId(null);
     setScreen(Screen.Betting);
   }, []);
+
+  const handleExit = useCallback(() => {
+    refetchBalance();
+    onExitGame();
+  }, [refetchBalance, onExitGame]);
   
   const handleCancelSearch = useCallback(() => {
-    onBalanceUpdate(betAmount);
     onCancelMatch('neon-pong', betAmount);
     setScreen(Screen.Betting);
-  }, [betAmount, onCancelMatch, onBalanceUpdate]);
-
-  const handleForfeit = useCallback(() => {
-    if (window.confirm("Are you sure you want to forfeit? You will lose your wager.")) {
-        setGameWinnerId(2);
-        setForfeited(true);
-        setScreen(Screen.Winner);
-    }
-  }, []);
+  }, [betAmount, onCancelMatch]);
 
   const renderScreen = () => {
     switch (screen) {
       case Screen.Matching:
         return (
-          <div className="flex flex-col items-center justify-center h-full animate-fadeIn text-center">
-            <h2 className="text-3xl font-bold font-display text-blue mb-4">Finding Opponent...</h2>
-            <p className="text-white mb-8">Wagering {betAmount} SOL</p>
-            <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-blue"></div>
-            <p className="text-gray-400 mt-8 max-w-sm">You have been added to the player pool. The game will begin as soon as another player selects the same wager.</p>
-            <button onClick={handleCancelSearch} className="mt-6 bg-pink/80 text-white font-bold py-2 px-6 rounded-lg hover:bg-pink transition-colors">Cancel Search</button>
-          </div>
+           <MatchingScreen
+            betAmount={betAmount}
+            onCancelSearch={handleCancelSearch}
+            colorTheme="blue"
+          />
         );
       case Screen.Game:
-        return <PongGameScreen onGameOver={handleGameOver} betAmount={betAmount} onForfeit={handleForfeit} />;
+        if (!gameId) return <div className="text-center text-xl text-red-500">Error: No Game ID. Please return to lobby.</div>;
+        return (
+          <PongGameScreen 
+            onGameOver={handleGameOver} 
+            betAmount={betAmount} 
+            gameId={gameId}
+            walletAddress={walletAddress}
+            nickname={nickname}
+          />
+        );
       case Screen.Winner:
-        return <WinnerScreen winnerId={gameWinnerId} betAmount={betAmount} onPlayAgain={handlePlayAgain} onExitGame={onExitGame} forfeited={forfeited}/>;
+        return <WinnerScreen winnerId={gameResult.winnerId} betAmount={betAmount} onPlayAgain={handlePlayAgain} onExitGame={handleExit} forfeited={gameResult.forfeited}/>;
       default:
         return <BettingScreen onFindOpponent={handleFindOpponent} walletConnected={!!walletAddress} balance={balance} onExitGame={onExitGame} onShowHowToPlay={() => setShowHowToPlay(true)} gameName="Neon Pong" colorTheme="blue"/>;
     }

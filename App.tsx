@@ -226,15 +226,15 @@ const App: React.FC = () => {
     }
   }, [walletAddress]);
   
-  const handleBalanceUpdate = useCallback((amount: number) => {
-    setBalance(prev => prev + amount);
-  }, []);
-
   const refetchBalance = useCallback(async () => {
     if (walletAddress && connection && !isDemoMode) {
-        const publicKey = new (window as any).solanaWeb3.PublicKey(walletAddress);
-        const balance = await connection.getBalance(publicKey);
-        setBalance(balance / (window as any).solanaWeb3.LAMPORTS_PER_SOL);
+        try {
+          const publicKey = new (window as any).solanaWeb3.PublicKey(walletAddress);
+          const balance = await connection.getBalance(publicKey);
+          setBalance(balance / (window as any).solanaWeb3.LAMPORTS_PER_SOL);
+        } catch (error) {
+          console.error("Failed to refetch balance:", error);
+        }
     }
   }, [walletAddress, connection, isDemoMode]);
 
@@ -255,7 +255,7 @@ const App: React.FC = () => {
         const response = await fetch(`${API_BASE_URL}/api/matchmaking/join`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gameId, betAmount, walletAddress }),
+            body: JSON.stringify({ gameId, betAmount, walletAddress, nickname }),
         });
         if (!response.ok) {
            throw new Error(`Server responded with status: ${response.status}`);
@@ -267,7 +267,7 @@ const App: React.FC = () => {
         alert("Could not connect to the matchmaking server. Please try again later.");
         return null; 
     }
-  }, [walletAddress, walletConnected]);
+  }, [walletAddress, walletConnected, nickname]);
 
   const handleCancelMatch = useCallback(async (gameId: string, betAmount: number) => {
     try {
@@ -331,7 +331,6 @@ const App: React.FC = () => {
             nickname={nickname}
             balance={balance}
             onExitGame={handleExitGame}
-            onBalanceUpdate={handleBalanceUpdate}
             onRequestMatch={handleRequestMatch}
             onCancelMatch={handleCancelMatch}
             provider={provider}
@@ -344,9 +343,9 @@ const App: React.FC = () => {
         {currentGame === 'neon-pong' && (
           <NeonPong 
             walletAddress={walletAddress}
+            nickname={nickname}
             balance={balance}
             onExitGame={handleExitGame}
-            onBalanceUpdate={handleBalanceUpdate}
             onRequestMatch={handleRequestMatch}
             onCancelMatch={handleCancelMatch}
             provider={provider}
@@ -359,9 +358,9 @@ const App: React.FC = () => {
         {currentGame === 'cosmic-dodge' && (
           <ViperPit 
             walletAddress={walletAddress}
+            nickname={nickname}
             balance={balance}
             onExitGame={handleExitGame}
-            onBalanceUpdate={handleBalanceUpdate}
             onRequestMatch={handleRequestMatch}
             onCancelMatch={handleCancelMatch}
             provider={provider}

@@ -12,17 +12,10 @@ const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 3001;
 
 // --- HTTP Server Setup (Matchmaking) ---
-const allowedOrigins = ['https://truepvp-frontend.onrender.com', 'http://localhost:3000', 'http://localhost:5173'];
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  }
-};
-app.use(cors(corsOptions));
+// Use a more permissive CORS policy for development to avoid "Failed to fetch" errors.
+// This allows requests from any origin. For production, you might want to restrict this
+// to your actual frontend domain.
+app.use(cors());
 app.use(express.json());
 
 const playerPool = new Map();
@@ -34,7 +27,6 @@ app.post('/api/matchmaking/join', (req, res) => {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // *** POOL SEPARATION LOGIC ***
     const playerType = walletAddress.startsWith('GUEST_') ? 'guest' : 'phantom';
     const matchKey = `${gameId}-${betAmount}-${playerType}`;
 
@@ -58,8 +50,8 @@ app.get('/api/matchmaking/status/:walletAddress', (req, res) => {
     const { walletAddress } = req.params;
     if (matchedPairs.has(walletAddress)) {
         const matchInfo = matchedPairs.get(walletAddress);
-        matchedPairs.delete(walletAddress); // Clean up after confirming
-        console.log(`[STATUS] Player ${walletAddress} confirmed match for game ${matchInfo.gameId}`);
+        // Do not delete from matchedPairs here; let the game logic handle cleanup.
+        console.log(`[STATUS] Player ${walletAddress} is matched for game ${matchInfo.gameId}`);
         res.json({ status: 'matched', gameId: matchInfo.gameId });
     } else {
         res.json({ status: 'waiting' });
@@ -71,7 +63,6 @@ app.post('/api/matchmaking/cancel', (req, res) => {
      if (!gameId || !betAmount || !walletAddress) {
         return res.status(400).json({ error: 'Missing required fields for cancel' });
     }
-    // *** POOL SEPARATION LOGIC (must also be applied here) ***
     const playerType = walletAddress.startsWith('GUEST_') ? 'guest' : 'phantom';
     const matchKey = `${gameId}-${betAmount}-${playerType}`;
 
@@ -86,64 +77,85 @@ app.post('/api/matchmaking/cancel', (req, res) => {
     }
 });
 
+app.get('/api/matchmaking/pool-stats', (req, res) => {
+    res.json({ totalPlayers: playerPool.size });
+});
 
-// --- WebSocket Server Setup (Live Gameplay) ---
+
+// --- WebSocket Server & Game Logic ---
 const activeGames = new Map();
+
+// --- Game Engine Imports ---
+const createSolanaGoldRushEngine = require('./game_engines/solanaGoldRushEngine');
+const createNeonPongEngine = require('./game_engines/neonPongEngine');
+const createCosmicDodgeEngine = require('./game_engines/cosmicDodgeEngine');
+
+const gameEngines = {
+    'solana-gold-rush': createSolanaGoldRushEngine,
+    'neon-pong': createNeonPongEngine,
+    'cosmic-dodge': createCosmicDodgeEngine,
+};
+
+const TICK_RATE = 1000 / 60; // 60 FPS for loop-based games
 
 wss.on('connection', (ws, req) => {
     console.log('[WS] Client connected');
-    let gameId;
+    let currentGameId;
     let playerWallet;
 
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
-            
-            if (data.type === 'join_game') {
-                gameId = data.gameId;
-                playerWallet = data.walletAddress;
-                const nickname = data.nickname || nicknameFor(playerWallet);
+            const { type, gameId, walletAddress, nickname, ...rest } = data;
+
+            if (type === 'join_game') {
+                currentGameId = gameId;
+                playerWallet = walletAddress;
 
                 if (!activeGames.has(gameId)) {
-                    const shuffledNumbers = [1, 2, 3, 4, 5].sort(() => 0.5 - Math.random());
-                    const gameState = {
-                        gameId: gameId,
-                        players: [{ walletAddress: playerWallet, nickname: nickname, score: 0, nuggets: [1, 2, 3, 4, 5], choice: null, ws: ws }],
-                        round: 0,
-                        availableRoundNumbers: shuffledNumbers,
-                        roundNumber: null,
-                        roundMessage: 'Waiting for opponent...',
-                        gameOver: false,
+                    const engineFactory = gameEngines[data.gameType];
+                    if (!engineFactory) {
+                        console.error(`[ERROR] Unknown game type: ${data.gameType}`);
+                        ws.close();
+                        return;
+                    }
+                    const engine = engineFactory();
+                    const gameState = engine.init();
+                    
+                    const gameSession = {
+                        gameId,
+                        gameType: data.gameType,
+                        engine,
+                        gameState,
+                        players: [{ walletAddress, nickname, ws }],
+                        intervalId: null,
                     };
-                    activeGames.set(gameId, gameState);
-                    console.log(`[GAME] Game ${gameId} created by ${playerWallet} (${nickname})`);
+                    activeGames.set(gameId, gameSession);
+                    console.log(`[GAME] Game ${gameId} (${data.gameType}) created by ${walletAddress}`);
                 } else {
-                    const gameState = activeGames.get(gameId);
-                    if (gameState.players.length < 2 && !gameState.players.find(p => p.walletAddress === playerWallet)) {
-                        gameState.players.push({ walletAddress: playerWallet, nickname: nickname, score: 0, nuggets: [1, 2, 3, 4, 5], choice: null, ws: ws });
-                        console.log(`[GAME] Player ${playerWallet} (${nickname}) joined game ${gameId}`);
-                        startRound(gameId);
+                    const gameSession = activeGames.get(gameId);
+                    if (gameSession.players.length < 2 && !gameSession.players.find(p => p.walletAddress === walletAddress)) {
+                        gameSession.players.push({ walletAddress, nickname, ws });
+                        console.log(`[GAME] Player ${walletAddress} joined game ${gameId}`);
+                        
+                        // Clean up matchmaking data
+                        matchedPairs.delete(gameSession.players[0].walletAddress);
+                        matchedPairs.delete(gameSession.players[1].walletAddress);
+
+                        if (gameSession.engine.start) {
+                           gameSession.engine.start(gameSession);
+                        }
+
+                        if (gameSession.engine.update) {
+                           gameSession.intervalId = setInterval(() => gameLoop(gameId), TICK_RATE);
+                        }
                     }
                 }
-            }
-
-            if (data.type === 'play_choice') {
-                const gameState = activeGames.get(gameId);
-                if (!gameState) return;
-                
-                const playerIndex = gameState.players.findIndex(p => p.walletAddress === playerWallet);
-                if (playerIndex !== -1 && gameState.players[playerIndex].choice === null) {
-                    gameState.players[playerIndex].choice = data.choice;
-                    gameState.players[playerIndex].nuggets = gameState.players[playerIndex].nuggets.filter(n => n !== data.choice);
-                    console.log(`[GAME] Player ${playerWallet} chose ${data.choice} in game ${gameId}`);
-
-                    if (gameState.players.every(p => p.choice !== null)) {
-                        processRound(gameId);
-                    } else {
-                         gameState.roundMessage = "Opponent is thinking...";
-                         broadcastGameState(gameId);
-                    }
-                }
+            } else {
+                 const gameSession = activeGames.get(currentGameId);
+                 if (gameSession && gameSession.engine.handleInput) {
+                    gameSession.engine.handleInput(gameSession, playerWallet, data);
+                 }
             }
         } catch (e) {
             console.error('[WS] Error processing message:', e);
@@ -152,102 +164,83 @@ wss.on('connection', (ws, req) => {
 
     ws.on('close', () => {
         console.log(`[WS] Client ${playerWallet} disconnected`);
-        if (gameId && activeGames.has(gameId)) {
-             activeGames.delete(gameId);
-             console.log(`[GAME] Game ${gameId} terminated due to disconnect.`);
+        if (currentGameId && activeGames.has(currentGameId)) {
+             const gameSession = activeGames.get(currentGameId);
+             
+             // Forfeit logic: if a player disconnects mid-game, the other player wins.
+             if (!gameSession.gameState.gameOver && gameSession.players.length === 2) {
+                const winner = gameSession.players.find(p => p.walletAddress !== playerWallet);
+                const loser = gameSession.players.find(p => p.walletAddress === playerWallet);
+                if (winner && loser) {
+                    console.log(`[FORFEIT] ${loser.walletAddress} disconnected. ${winner.walletAddress} wins game ${currentGameId}.`);
+                    gameSession.gameState.gameOver = true;
+                    gameSession.gameState.winnerId = gameSession.players.findIndex(p => p.walletAddress === winner.walletAddress) + 1;
+                    gameSession.gameState.forfeited = true; // Set the forfeit flag
+                    broadcastGameState(currentGameId);
+                }
+             }
+
+             // Clean up the game session if it's over or wasn't full
+             if (gameSession.gameState.gameOver || gameSession.players.length < 2) {
+                if (gameSession.intervalId) clearInterval(gameSession.intervalId);
+                activeGames.delete(currentGameId);
+                console.log(`[GAME] Game ${currentGameId} terminated and cleaned up.`);
+             } else {
+                // If the game is running, we might mark the player as disconnected but keep the session
+                // For simplicity here, we'll just log it. A more robust system would handle reconnection.
+                console.log(`[GAME] Player ${playerWallet} disconnected from active game ${currentGameId}.`);
+             }
         }
     });
 });
 
+function gameLoop(gameId) {
+    const gameSession = activeGames.get(gameId);
+    if (!gameSession) return;
+    
+    gameSession.engine.update(gameSession);
+    broadcastGameState(gameId);
+    
+    if (gameSession.gameState.gameOver) {
+        console.log(`[GAME] Game ${gameId} finished. Winner ID: ${gameSession.gameState.winnerId}`);
+        clearInterval(gameSession.intervalId);
+        // Delay cleanup to allow final state to be sent
+        setTimeout(() => {
+            activeGames.delete(gameId);
+            console.log(`[GAME] Cleaned up game session ${gameId}.`);
+        }, 5000);
+    }
+}
+
 function broadcastGameState(gameId) {
-    const gameState = activeGames.get(gameId);
-    if (!gameState) return;
+    const gameSession = activeGames.get(gameId);
+    if (!gameSession) return;
 
-    const bothPlayersMadeChoice = gameState.players.length === 2 && gameState.players.every(p => p.choice !== null);
-
-    gameState.players.forEach(player => {
+    gameSession.players.forEach((player, index) => {
         if (player.ws.readyState === WebSocket.OPEN) {
-            const opponent = gameState.players.find(p => p.walletAddress !== player.walletAddress);
-            const stateForPlayer = {
-                gameId: gameState.gameId,
-                round: gameState.round,
-                roundNumber: gameState.roundNumber,
-                roundMessage: gameState.roundMessage,
-                gameOver: gameState.gameOver,
-                you: {
-                    walletAddress: player.walletAddress,
-                    nickname: player.nickname,
-                    score: player.score,
-                    nuggets: player.nuggets,
-                    choice: player.choice,
-                },
-                opponent: opponent ? {
-                    walletAddress: opponent.walletAddress,
-                    nickname: opponent.nickname,
-                    score: opponent.score,
-                    nuggets: opponent.nuggets,
-                    choice: bothPlayersMadeChoice ? opponent.choice : null,
-                } : null,
-            };
-            player.ws.send(JSON.stringify(stateForPlayer));
+            // Get the base state from the engine
+            const baseState = gameSession.engine.getStateForPlayer(gameSession, player.walletAddress);
+
+            // If game is over, transform winnerId to be client-specific and add forfeit flag
+            // This ensures the client always knows if "it" won (winnerId: 1), lost (winnerId: 2), or drew (winnerId: null)
+            if (baseState.gameOver) {
+                const trueWinnerId = gameSession.gameState.winnerId; // The real winner ID (1 or 2)
+                const playerNumericId = index + 1;
+                
+                if (trueWinnerId === null) {
+                    baseState.winnerId = null; // Draw
+                } else {
+                    baseState.winnerId = (trueWinnerId === playerNumericId) ? 1 : 2;
+                }
+                baseState.forfeited = gameSession.gameState.forfeited || false;
+            }
+
+            player.ws.send(JSON.stringify(baseState));
         }
     });
 }
 
-function startRound(gameId) {
-    const gameState = activeGames.get(gameId);
-    if (!gameState || gameState.players.length < 2) return;
-    gameState.round++;
-    gameState.roundNumber = gameState.availableRoundNumbers[gameState.round - 1];
-    gameState.players.forEach(p => p.choice = null);
-    gameState.roundMessage = `Round ${gameState.round} - Choose Your Data Chip!`;
-    console.log(`[GAME] Starting round ${gameState.round} for game ${gameId}`);
-    broadcastGameState(gameId);
-}
-
-function processRound(gameId) {
-    const gameState = activeGames.get(gameId);
-    if (!gameState) return;
-    const [p1, p2] = gameState.players;
-    const roundValue = gameState.roundNumber;
-
-    broadcastGameState(gameId); // Broadcast the revealed choices first
-
-    setTimeout(() => {
-        let roundWinner = null;
-        if (p1.choice > p2.choice) roundWinner = p1;
-        if (p2.choice > p1.choice) roundWinner = p2;
-
-        if (roundWinner) {
-            const points = roundValue + p1.choice + p2.choice;
-            roundWinner.score += points;
-            gameState.roundMessage = `${roundWinner.nickname} wins ${points} points!`;
-        } else {
-            gameState.roundMessage = "It's a draw!";
-        }
-        broadcastGameState(gameId);
-
-        setTimeout(() => {
-            if (gameState.round >= 5) {
-                let winner = null;
-                if (p1.score > p2.score) winner = p1;
-                if (p2.score > p1.score) winner = p2;
-                gameState.roundMessage = winner ? `Game Over! Winner is ${winner.nickname}` : 'Game Over! It is a draw!';
-                gameState.gameOver = true;
-                broadcastGameState(gameId);
-                setTimeout(() => activeGames.delete(gameId), 1000);
-            } else {
-                startRound(gameId);
-            }
-        }, 2000); 
-    }, 1500);
-}
-
-function nicknameFor(address) {
-    if (address && address.startsWith('GUEST_')) return 'Guest';
-    if (address) return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
-    return 'Opponent';
-}
+global.broadcastGameState = broadcastGameState; // Make it accessible to engines
 
 server.listen(PORT, () => {
     console.log(`Server is live on http://localhost:${PORT}`);

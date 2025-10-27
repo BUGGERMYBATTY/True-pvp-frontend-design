@@ -1,237 +1,112 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-// Game constants
+// Game constants (for rendering only)
 const PADDLE_HEIGHT = 100;
 const PADDLE_WIDTH = 12;
 const BALL_SIZE = 12;
 const GAME_WIDTH = 600;
 const GAME_HEIGHT = 400;
-const WINNING_SCORE = 3; // Points to win a round
-const WINNING_ROUNDS = 2; // Rounds to win the match
+
+const WS_URL = (import.meta as any).env?.VITE_WS_BASE_URL || 'ws://localhost:3001';
 
 interface PongGameScreenProps {
-  onGameOver: (winnerId: number | null) => void;
+  onGameOver: (winnerId: number | null, forfeited: boolean) => void;
   betAmount: number;
-  onForfeit: () => void;
+  gameId: string;
+  walletAddress: string;
+  nickname: string;
 }
 
-const PongGameScreen: React.FC<PongGameScreenProps> = ({ onGameOver, betAmount, onForfeit }) => {
-  const [player1Y, setPlayer1Y] = useState(GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2);
-  const [player2Y, setPlayer2Y] = useState(GAME_HEIGHT / 2 - PADDLE_HEIGHT / 2);
-  const [ball, setBall] = useState({
-    x: GAME_WIDTH / 2,
-    y: GAME_HEIGHT / 2,
-    vx: 3,
-    vy: 3,
-  });
-  const [score, setScore] = useState({ player1: 0, player2: 0 });
-  const [roundsWon, setRoundsWon] = useState({ player1: 0, player2: 0 });
-  const [message, setMessage] = useState('First to 2 rounds wins!');
-  const [paddleSpeed, setPaddleSpeed] = useState(6);
-  const keysPressed = useRef<{ [key: string]: boolean }>({});
-  const gameLoopRef = useRef<number | undefined>(undefined);
-  const isGameActive = useRef(true);
-  const speedIncreaseCount = useRef(0);
+const PongGameScreen: React.FC<PongGameScreenProps> = ({ onGameOver, betAmount, gameId, walletAddress, nickname }) => {
+  const [gameState, setGameState] = useState<any>(null);
+  const ws = useRef<WebSocket | null>(null);
 
-  const resetBall = useCallback((direction: number) => {
-    setBall({
-      x: GAME_WIDTH / 2,
-      y: GAME_HEIGHT / 2,
-      vx: 3 * direction,
-      vy: Math.random() > 0.5 ? 3 : -3,
-    });
-    speedIncreaseCount.current = 0;
-    setPaddleSpeed(6);
-  }, []);
+  useEffect(() => {
+    ws.current = new WebSocket(WS_URL);
+    
+    ws.current.onopen = () => {
+      console.log('Neon Pong WebSocket connected');
+      ws.current?.send(JSON.stringify({
+        type: 'join_game',
+        gameType: 'neon-pong',
+        gameId,
+        walletAddress,
+        nickname,
+      }));
+    };
 
-  const gameLoop = useCallback(() => {
-    if (isGameActive.current) {
-        // --- Paddle Logic ---
-        let nextPlayer1Y = player1Y;
-        if (keysPressed.current['w']) {
-            nextPlayer1Y -= paddleSpeed;
-        }
-        if (keysPressed.current['s']) {
-            nextPlayer1Y += paddleSpeed;
-        }
-        nextPlayer1Y = Math.max(0, Math.min(nextPlayer1Y, GAME_HEIGHT - PADDLE_HEIGHT));
+    ws.current.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.gameOver) {
+        onGameOver(data.winnerId, data.forfeited || false);
+      } else {
+        setGameState(data);
+      }
+    };
 
-        let nextPlayer2Y = player2Y;
-        const paddleCenter = nextPlayer2Y + PADDLE_HEIGHT / 2;
-        if (ball.vx > 0) { // AI moves only when ball is coming towards it
-            if (paddleCenter < ball.y - 20) {
-                nextPlayer2Y = Math.min(nextPlayer2Y + paddleSpeed * 0.7, GAME_HEIGHT - PADDLE_HEIGHT);
-            } else if (paddleCenter > ball.y + 20) {
-                nextPlayer2Y = Math.max(nextPlayer2Y - paddleSpeed * 0.7, 0);
-            }
-        }
-        
-        // --- Ball Logic ---
-        let nextBall = { ...ball };
-        nextBall.x += nextBall.vx;
-        nextBall.y += nextBall.vy;
-        
-        let ballSpeedIncreased = false;
+    ws.current.onclose = () => {
+      console.log('Neon Pong WebSocket disconnected');
+    };
 
-        // Top/bottom wall collision
-        if (nextBall.y <= 0 || nextBall.y >= GAME_HEIGHT - BALL_SIZE) {
-            nextBall.vy *= -1;
-            if (nextBall.y <= 0) nextBall.y = 0;
-            if (nextBall.y >= GAME_HEIGHT - BALL_SIZE) nextBall.y = GAME_HEIGHT - BALL_SIZE;
-        }
-
-        let collidedWithPaddle = false;
-        // Player 1 (left) paddle collision
-        if (
-            nextBall.vx < 0 &&
-            ball.x >= PADDLE_WIDTH &&
-            nextBall.x <= PADDLE_WIDTH &&
-            nextBall.y + BALL_SIZE >= nextPlayer1Y &&
-            nextBall.y <= nextPlayer1Y + PADDLE_HEIGHT
-        ) {
-            nextBall.vx *= -1.15;
-            nextBall.x = PADDLE_WIDTH; // Snap to paddle edge to prevent tunneling
-            collidedWithPaddle = true;
-            ballSpeedIncreased = true;
-        }
-        
-        // Player 2 (right) paddle collision
-        if (
-            !collidedWithPaddle &&
-            nextBall.vx > 0 &&
-            ball.x + BALL_SIZE <= GAME_WIDTH - PADDLE_WIDTH &&
-            nextBall.x + BALL_SIZE >= GAME_WIDTH - PADDLE_WIDTH &&
-            nextBall.y + BALL_SIZE >= nextPlayer2Y &&
-            nextBall.y <= nextPlayer2Y + PADDLE_HEIGHT
-        ) {
-            nextBall.vx *= -1.15;
-            nextBall.x = GAME_WIDTH - PADDLE_WIDTH - BALL_SIZE; // Snap to paddle edge
-            collidedWithPaddle = true;
-            ballSpeedIncreased = true;
-        }
-
-        if (ballSpeedIncreased) {
-            speedIncreaseCount.current += 1;
-            if (speedIncreaseCount.current > 0 && speedIncreaseCount.current % 2 === 0) {
-                setPaddleSpeed(p => p + 1);
-            }
-        }
-
-        // --- State Updates ---
-        // Check for score only if no paddle collision occurred
-        const player2Scored = !collidedWithPaddle && nextBall.x < 0;
-        const player1Scored = !collidedWithPaddle && nextBall.x > GAME_WIDTH;
-
-        if (player1Scored) {
-            setScore(s => ({ ...s, player1: s.player1 + 1 }));
-            resetBall(-1);
-        } else if (player2Scored) {
-            setScore(s => ({ ...s, player2: s.player2 + 1 }));
-            resetBall(1);
-        } else {
-            // No score, update all entity positions
-            setPlayer1Y(nextPlayer1Y);
-            setPlayer2Y(nextPlayer2Y);
-            setBall(nextBall);
-        }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'w' || e.key === 's') {
+        ws.current?.send(JSON.stringify({ type: 'move_paddle', direction: e.key === 'w' ? 'up' : 'down' }));
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+       if (e.key === 'w' || e.key === 's') {
+        ws.current?.send(JSON.stringify({ type: 'stop_paddle', direction: e.key === 'w' ? 'up' : 'down' }));
+      }
     }
 
-    gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [player1Y, player2Y, ball, resetBall, paddleSpeed]);
-  
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => { keysPressed.current[e.key] = true; };
-    const handleKeyUp = (e: KeyboardEvent) => { keysPressed.current[e.key] = false; };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    gameLoopRef.current = requestAnimationFrame(gameLoop);
-
     return () => {
+      ws.current?.close();
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      if (gameLoopRef.current) {
-        cancelAnimationFrame(gameLoopRef.current);
-      }
     };
-  }, [gameLoop]);
+  }, [gameId, walletAddress, nickname, onGameOver]);
 
-  // This effect handles round and game end logic
-  useEffect(() => {
-    if (!isGameActive.current) return;
+  if (!gameState) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="text-white text-2xl font-display">Waiting for server...</div>
+      </div>
+    );
+  }
 
-    let roundWinnerId: number | null = null;
-    if (score.player1 >= WINNING_SCORE) {
-        roundWinnerId = 1;
-    } else if (score.player2 >= WINNING_SCORE) {
-        roundWinnerId = 2;
-    }
-
-    if (roundWinnerId) {
-        isGameActive.current = false;
-        const newRoundsWon = { ...roundsWon };
-        
-        if (roundWinnerId === 1) {
-            newRoundsWon.player1++;
-            setMessage('You win the round!');
-        } else {
-            newRoundsWon.player2++;
-            setMessage('Opponent wins the round!');
-        }
-
-        setRoundsWon(newRoundsWon);
-
-        if (newRoundsWon.player1 >= WINNING_ROUNDS) {
-            setTimeout(() => onGameOver(1), 2000);
-            return;
-        }
-        if (newRoundsWon.player2 >= WINNING_ROUNDS) {
-            setTimeout(() => onGameOver(2), 2000);
-            return;
-        }
-        
-        // Start next round
-        setTimeout(() => {
-            setScore({ player1: 0, player2: 0 });
-            resetBall(roundWinnerId === 1 ? -1 : 1); // Loser serves
-            const currentRoundNumber = newRoundsWon.player1 + newRoundsWon.player2 + 1;
-            setMessage(`Round ${currentRoundNumber}`);
-            isGameActive.current = true;
-        }, 3000);
-    }
-  }, [score, roundsWon, onGameOver, resetBall]);
+  const { you, opponent, ball, message } = gameState;
 
   return (
     <div className="w-full h-full flex flex-col justify-center items-center p-4 animate-fadeIn relative">
-      {/* Score and Pot Display */}
-       <div className="w-full flex justify-between items-center mb-4 px-4" style={{width: GAME_WIDTH}}>
+      <div className="w-full flex justify-between items-center mb-4 px-4" style={{width: GAME_WIDTH}}>
         <div className="text-left">
-            <h3 className="text-2xl font-bold font-display">You</h3>
-            <p className="text-xl text-blue">Score: {score.player1} <span className="text-gray-400 text-base">| Rounds: {roundsWon.player1}</span></p>
+            <h3 className="text-2xl font-bold font-display">{you.nickname}</h3>
+            <p className="text-xl text-blue">Score: {you.score} <span className="text-gray-400 text-base">| Rounds: {you.roundsWon}</span></p>
         </div>
         <div className="text-center">
           <h4 className="text-lg font-display text-gray-400">Total Pot</h4>
           <p className="text-2xl font-bold text-blue-light">{(betAmount * 2).toFixed(2)} SOL</p>
         </div>
         <div className="text-right">
-            <h3 className="text-2xl font-bold font-display">Opponent</h3>
-            <p className="text-xl text-pink">Score: {score.player2} <span className="text-gray-400 text-base">| Rounds: {roundsWon.player2}</span></p>
+            <h3 className="text-2xl font-bold font-display">{opponent.nickname}</h3>
+            <p className="text-xl text-pink">Score: {opponent.score} <span className="text-gray-400 text-base">| Rounds: {opponent.roundsWon}</span></p>
         </div>
       </div>
-      {/* Game Area */}
       <div 
         className="relative bg-brand-dark border-2 border-blue/50" 
         style={{ width: GAME_WIDTH, height: GAME_HEIGHT }}
       >
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-full border-l-2 border-dashed border-blue/20"></div>
-        {/* Paddles and Ball */}
         <div
           className="absolute bg-blue shadow-[0_0_10px] shadow-blue"
           style={{
             width: PADDLE_WIDTH,
             height: PADDLE_HEIGHT,
-            left: 0,
-            top: player1Y,
+            left: you.x,
+            top: you.y,
           }}
         />
         <div
@@ -239,8 +114,8 @@ const PongGameScreen: React.FC<PongGameScreenProps> = ({ onGameOver, betAmount, 
           style={{
             width: PADDLE_WIDTH,
             height: PADDLE_HEIGHT,
-            right: 0,
-            top: player2Y,
+            right: opponent.x,
+            top: opponent.y,
           }}
         />
         <div
@@ -256,13 +131,6 @@ const PongGameScreen: React.FC<PongGameScreenProps> = ({ onGameOver, betAmount, 
             {message}
         </div>
       </div>
-      <button
-        onClick={onForfeit}
-        className="absolute bottom-4 right-4 text-pink-light hover:text-white bg-pink/20 hover:bg-pink/30 transition-colors z-10 p-2 px-4 rounded-lg"
-        aria-label="Forfeit Match"
-      >
-        Forfeit Match
-      </button>
     </div>
   );
 };

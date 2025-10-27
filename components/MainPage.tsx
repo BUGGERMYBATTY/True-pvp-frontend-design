@@ -12,162 +12,135 @@ type LeaderboardEntry = {
   winnings: number;
 };
 
-// Expanded to 30 entries per category with nicknames
-const LEADERBOARD_DATA: { [key: string]: LeaderboardEntry[] } = {
-  '1d': [
-    { rank: 1, address: 'GUEST_DEMO_WALLET', nickname: 'Guest', winnings: 25.5 },
-    { rank: 2, address: '7xYq...k9P1', nickname: 'NeonNinja', winnings: 18.2 },
-    { rank: 3, address: 'FzWc...bN4h', nickname: 'CypherPunk', winnings: 12.0 },
-    { rank: 4, address: 'LpA3...vXzG', nickname: 'Glitch', winnings: 9.7 },
-    { rank: 5, address: '9sDf...mK3J', nickname: 'Vector', winnings: 5.1 },
-    { rank: 6, address: 'aB1c...dE2f', nickname: 'BitRunner', winnings: 4.8 },
-    { rank: 7, address: 'hG3i...jK4l', nickname: 'Satoshi Jr', winnings: 4.5 },
-    { rank: 8, address: 'mN5o...pQ6r', nickname: 'GridRider', winnings: 4.2 },
-    { rank: 9, address: 'sT7u...vW8x', nickname: 'Arcade King', winnings: 3.9 },
-    { rank: 10, address: 'yZ9a...bC0d', nickname: 'ZeroCool', winnings: 3.6 },
-    { rank: 11, address: 'eF1g...hI2j', nickname: 'Proxy', winnings: 3.3 },
-    { rank: 12, address: 'kL3m...nO4p', nickname: 'SynthWave', winnings: 3.1 },
-    { rank: 13, address: 'qR5s...tU6v', nickname: 'DataThief', winnings: 2.9 },
-    { rank: 14, address: 'wX7y...zZ8a', nickname: 'CodeSlinger', winnings: 2.7 },
-    { rank: 15, address: 'bC9d...eF0g', nickname: 'ROM', winnings: 2.5 },
-    { rank: 16, address: 'hI1j...kL2m', nickname: 'RAM', winnings: 2.3 },
-    { rank: 17, address: 'nO3p...qR4s', nickname: 'Kernel', winnings: 2.1 },
-    { rank: 18, address: 'tU5v...wX6y', nickname: 'Byte', winnings: 1.9 },
-    { rank: 19, address: 'zZ7a...bC8d', nickname: 'Voxel', winnings: 1.7 },
-    { rank: 20, address: 'eF9g...hI0j', nickname: 'Pixel', winnings: 1.5 },
-    { rank: 21, address: 'kL1m...nO2p', nickname: 'Firewall', winnings: 1.4 },
-    { rank: 22, address: 'qR3s...tU4v', nickname: 'Root', winnings: 1.3 },
-    { rank: 23, address: 'wX5y...zZ6a', nickname: 'Admin', winnings: 1.2 },
-    { rank: 24, address: 'bC7d...eF8g', nickname: 'Node', winnings: 1.1 },
-    { rank: 25, address: 'hI9j...kL0m', nickname: 'Hash', winnings: 1.0 },
-    { rank: 26, address: 'nO1p...qR2s', nickname: 'Ledger', winnings: 0.9 },
-    { rank: 27, address: 'tU3v...wX4y', nickname: 'Mainframe', winnings: 0.8 },
-    { rank: 28, address: 'zZ5a...bC6d', nickname: 'DialUp', winnings: 0.7 },
-    { rank: 29, address: 'eF7g...hI8j', nickname: 'Lag', winnings: 0.6 },
-    { rank: 30, address: 'kL9m...nO0p', nickname: 'Ping', winnings: 0.5 },
-  ],
-  '3d': [
-    { rank: 1, address: 'FzWc...bN4h', nickname: 'CypherPunk', winnings: 78.1 },
-    { rank: 2, address: '7xYq...k9P1', nickname: 'NeonNinja', winnings: 65.4 },
-    { rank: 3, address: 'GUEST_DEMO_WALLET', nickname: 'Guest', winnings: 55.9 },
-    { rank: 4, address: 'QwE5...zX2a', nickname: 'Phantom', winnings: 43.2 },
-    { rank: 5, address: 'LpA3...vXzG', nickname: 'Glitch', winnings: 31.8 },
-    { rank: 6, address: 'pL4a...qW2r', nickname: 'Echo', winnings: 29.5 },
-    { rank: 7, address: 'sD5f...gH3j', nickname: 'Reverb', winnings: 27.1 },
-    { rank: 8, address: 'kL6m...nO4p', nickname: 'Delay', winnings: 25.2 },
-    { rank: 9, address: 'zX7c...vB5n', nickname: 'Chorus', winnings: 23.4 },
-    { rank: 10, address: 'aQ8w...sE6d', nickname: 'Flanger', winnings: 21.8 },
-    { rank: 11, address: 'fR9t...gY7h', nickname: 'Phaser', winnings: 20.1 },
-    { rank: 12, address: 'uJ1k...iL8o', nickname: 'Wah', winnings: 18.5 },
-    { rank: 13, address: 'pA2s...dF3g', nickname: 'Fuzz', winnings: 17.2 },
-    { rank: 14, address: 'hJ4k...lK5l', nickname: 'Overdrive', winnings: 16.0 },
-    { rank: 15, address: 'zX6c...vB7n', nickname: 'Distortion', winnings: 14.9 },
-    { rank: 16, address: 'mQ8w...aP9s', nickname: 'Gain', winnings: 13.8 },
-    { rank: 17, address: 'dF1g...hJ2k', nickname: 'Amplitude', winnings: 12.7 },
-    { rank: 18, address: 'lK3l...zX4c', nickname: 'Frequency', winnings: 11.6 },
-    { rank: 19, address: 'vB5n...mQ6a', nickname: 'Hertz', winnings: 10.5 },
-    { rank: 20, address: 'pS7d...fG8h', nickname: 'Wave', winnings: 9.4 },
-    { rank: 21, address: 'jK9l...aP1s', nickname: 'Sine', winnings: 8.3 },
-    { rank: 22, address: 'dF2g...hJ3k', nickname: 'Square', winnings: 7.2 },
-    { rank: 23, address: 'lK4l...zX5c', nickname: 'Sawtooth', winnings: 6.1 },
-    { rank: 24, address: 'vB6n...mQ7a', nickname: 'Triangle', winnings: 5.0 },
-    { rank: 25, address: 'pS8d...fG9h', nickname: 'Noise', winnings: 4.5 },
-    { rank: 26, address: 'jK0l...aP1s', nickname: 'MIDI', winnings: 4.0 },
-    { rank: 27, address: 'dF2g...hJ3k', nickname: 'Tracker', winnings: 3.5 },
-    { rank: 28, address: 'lK4l...zX5c', nickname: 'DemoScene', winnings: 3.0 },
-    { rank: 29, address: 'vB6n...mQ7a', nickname: 'SubWoofer', winnings: 2.5 },
-    { rank: 30, address: 'pS8d...fG9h', nickname: 'Tweeter', winnings: 2.0 },
-  ],
-  '7d': [
-    { rank: 1, address: 'FzWc...bN4h', nickname: 'CypherPunk', winnings: 152.6 },
-    { rank: 2, address: 'LpA3...vXzG', nickname: 'Glitch', winnings: 131.2 },
-    { rank: 3, address: 'QwE5...zX2a', nickname: 'Phantom', winnings: 110.0 },
-    { rank: 4, address: '7xYq...k9P1', nickname: 'NeonNinja', winnings: 98.5 },
-    { rank: 5, address: 'GUEST_DEMO_WALLET', nickname: 'Guest', winnings: 85.3 },
-    { rank: 6, address: 'zC1v...bN2m', nickname: 'Circuit', winnings: 80.1 },
-    { rank: 7, address: 'xS3d...fG4h', nickname: 'Resistor', winnings: 75.4 },
-    { rank: 8, address: 'jK5l...aP6s', nickname: 'Capacitor', winnings: 70.2 },
-    { rank: 9, address: 'qW7e...rT8y', nickname: 'Diode', winnings: 65.6 },
-    { rank: 10, address: 'uI9o...pA1s', nickname: 'Transistor', winnings: 61.3 },
-    { rank: 11, address: 'dF2g...hJ3k', nickname: 'Inductor', winnings: 57.2 },
-    { rank: 12, address: 'lK4l...zX5c', nickname: 'Relay', winnings: 53.4 },
-    { rank: 13, address: 'vB6n...mQ7a', nickname: 'Switch', winnings: 49.8 },
-    { rank: 14, address: 'pS8d...fG9h', nickname: 'Fuse', winnings: 46.5 },
-    { rank: 15, address: 'jK0l...aP1s', nickname: 'Volt', winnings: 43.1 },
-    { rank: 16, address: 'zC2v...bN3m', nickname: 'Amp', winnings: 40.0 },
-    { rank: 17, address: 'xS4d...fG5h', nickname: 'Watt', winnings: 37.2 },
-    { rank: 18, address: 'jK6l...aP7s', nickname: 'Ohm', winnings: 34.5 },
-    { rank: 19, address: 'qW8e...rT9y', nickname: 'Joule', winnings: 32.1 },
-    { rank: 20, address: 'uI0o...pA1s', nickname: 'Coulomb', winnings: 29.8 },
-    { rank: 21, address: 'dF2g...hJ3k', nickname: 'Farad', winnings: 27.6 },
-    { rank: 22, address: 'lK4l...zX5c', nickname: 'Henry', winnings: 25.5 },
-    { rank: 23, address: 'vB6n...mQ7a', nickname: 'Tesla', winnings: 23.2 },
-    { rank: 24, address: 'pS8d...fG9h', nickname: 'Weber', winnings: 21.1 },
-    { rank: 25, address: 'jK0l...aP1s', nickname: 'Lumen', winnings: 19.5 },
-    { rank: 26, address: 'zC2v...bN3m', nickname: 'Candela', winnings: 18.0 },
-    { rank: 27, address: 'xS4d...fG5h', nickname: 'Mole', winnings: 16.5 },
-    { rank: 28, address: 'jK6l...aP7s', nickname: 'Kelvin', winnings: 15.0 },
-    { rank: 29, address: 'qW8e...rT9y', nickname: 'Pascal', winnings: 13.5 },
-    { rank: 30, address: 'uI0o...pA1s', nickname: 'Newton', winnings: 12.0 },
-  ],
-  '30d': [
-    { rank: 1, address: 'LpA3...vXzG', nickname: 'Glitch', winnings: 540.8 },
-    { rank: 2, address: 'FzWc...bN4h', nickname: 'CypherPunk', winnings: 499.1 },
-    { rank: 3, address: '9sDf...mK3J', nickname: 'Vector', winnings: 412.7 },
-    { rank: 4, address: 'QwE5...zX2a', nickname: 'Phantom', winnings: 350.5 },
-    { rank: 5, address: '7xYq...k9P1', nickname: 'NeonNinja', winnings: 280.9 },
-    { rank: 6, address: 'oP1a...sD2f', nickname: 'Hacker', winnings: 271.3 },
-    { rank: 7, address: 'gH3j...kL4m', nickname: 'ScriptKiddie', winnings: 262.0 },
-    { rank: 8, address: 'nO5p...qR6s', nickname: 'Wizard', winnings: 253.1 },
-    { rank: 9, address: 'tU7v...wX8y', nickname: 'Sorcerer', winnings: 244.5 },
-    { rank: 10, address: 'zZ9a...bC0b', nickname: 'Warlock', winnings: 236.2 },
-    { rank: 11, address: 'dE1c...fG2h', nickname: 'Mage', winnings: 228.1 },
-    { rank: 12, address: 'iJ3k...lM4n', nickname: 'Cleric', winnings: 220.3 },
-    { rank: 13, address: 'oP5q...rS6t', nickname: 'Paladin', winnings: 212.8 },
-    { rank: 14, address: 'uV7w...xY8z', nickname: 'Ranger', winnings: 205.5 },
-    { rank: 15, address: 'aB9c...dE0f', nickname: 'Rogue', winnings: 198.5 },
-    { rank: 16, address: 'gH1j...kL2m', nickname: 'Bard', winnings: 191.7 },
-    { rank: 17, address: 'nO3p...qR4s', nickname: 'Druid', winnings: 185.2 },
-    { rank: 18, address: 'tU5v...wX6y', nickname: 'Monk', winnings: 178.9 },
-    { rank: 19, address: 'zZ7a...bC8b', nickname: 'Barbarian', winnings: 172.8 },
-    { rank: 20, address: 'dE9c...fG0h', nickname: 'Fighter', winnings: 166.9 },
-    { rank: 21, address: 'iJ1k...lM2n', nickname: 'Artificer', winnings: 161.2 },
-    { rank: 22, address: 'oP3q...rS4t', nickname: 'BloodHunter', winnings: 155.8 },
-    { rank: 23, address: 'uV5w...xY6z', nickname: 'Goblin', winnings: 150.5 },
-    { rank: 24, address: 'aB7c...dE8f', nickname: 'Orc', winnings: 145.4 },
-    { rank: 25, address: 'gH9j...kL0m', nickname: 'Elf', winnings: 140.5 },
-    { rank: 26, address: 'nO1p...qR2s', nickname: 'Dwarf', winnings: 135.8 },
-    { rank: 27, address: 'tU3v...wX4y', nickname: 'Halfling', winnings: 131.2 },
-    { rank: 28, address: 'zZ5a...bC6b', nickname: 'Gnome', winnings: 126.8 },
-    { rank: 29, address: 'dE7c...fG8h', nickname: 'Tiefling', winnings: 122.6 },
-    { rank: 30, address: 'iJ9k...lM0n', nickname: 'Dragonborn', winnings: 118.5 },
-  ],
+// Expanded to support game-specific leaderboards
+const LEADERBOARD_DATA: { [game: string]: { [time: string]: LeaderboardEntry[] } } = {
+  overall: {
+    '1d': [
+      { rank: 1, address: 'LpA3...vXzG', nickname: 'Glitch', winnings: 45.5 },
+      { rank: 2, address: '7xYq...k9P1', nickname: 'NeonNinja', winnings: 38.2 },
+      { rank: 3, address: 'FzWc...bN4h', nickname: 'CypherPunk', winnings: 32.0 },
+      { rank: 4, address: 'GUEST_DEMO_WALLET', nickname: 'Guest', winnings: 29.7 },
+      { rank: 5, address: '9sDf...mK3J', nickname: 'Vector', winnings: 25.1 },
+    ],
+    '3d': [
+      { rank: 1, address: 'FzWc...bN4h', nickname: 'CypherPunk', winnings: 178.1 },
+      { rank: 2, address: '7xYq...k9P1', nickname: 'NeonNinja', winnings: 165.4 },
+      { rank: 3, address: 'LpA3...vXzG', nickname: 'Glitch', winnings: 155.9 },
+    ],
+    '7d': [
+      { rank: 1, address: 'FzWc...bN4h', nickname: 'CypherPunk', winnings: 352.6 },
+      { rank: 2, address: 'LpA3...vXzG', nickname: 'Glitch', winnings: 331.2 },
+      { rank: 3, address: 'QwE5...zX2a', nickname: 'Phantom', winnings: 310.0 },
+    ],
+    '30d': [
+      { rank: 1, address: 'LpA3...vXzG', nickname: 'Glitch', winnings: 1540.8 },
+      { rank: 2, address: 'FzWc...bN4h', nickname: 'CypherPunk', winnings: 1499.1 },
+      { rank: 3, address: '9sDf...mK3J', nickname: 'Vector', winnings: 1412.7 },
+    ],
+  },
+  'solana-gold-rush': {
+    '1d': [
+      { rank: 1, address: 'Au1g...H2j3', nickname: 'GoldDigger', winnings: 15.2 },
+      { rank: 2, address: 'Ag4k...L5m6', nickname: 'NuggetHunter', winnings: 12.8 },
+      { rank: 3, address: 'Cu7n...O8p9', nickname: 'ClaimJumper', winnings: 9.1 },
+    ],
+    '3d': [
+      { rank: 1, address: 'Au1g...H2j3', nickname: 'GoldDigger', winnings: 45.2 },
+      { rank: 2, address: 'Cu7n...O8p9', nickname: 'ClaimJumper', winnings: 38.1 },
+      { rank: 3, address: 'Ag4k...L5m6', nickname: 'NuggetHunter', winnings: 33.4 },
+    ],
+    '7d': [
+      { rank: 1, address: 'Cu7n...O8p9', nickname: 'ClaimJumper', winnings: 99.5 },
+      { rank: 2, address: 'Au1g...H2j3', nickname: 'GoldDigger', winnings: 92.1 },
+      { rank: 3, address: 'Ag4k...L5m6', nickname: 'NuggetHunter', winnings: 85.3 },
+    ],
+    '30d': [
+      { rank: 1, address: 'Cu7n...O8p9', nickname: 'ClaimJumper', winnings: 350.7 },
+      { rank: 2, address: 'Au1g...H2j3', nickname: 'GoldDigger', winnings: 330.2 },
+      { rank: 3, address: 'Ag4k...L5m6', nickname: 'NuggetHunter', winnings: 310.9 },
+    ],
+  },
+  'neon-pong': {
+    '1d': [
+      { rank: 1, address: 'Ne1a...B2c3', nickname: 'PaddleMaster', winnings: 22.1 },
+      { rank: 2, address: 'Ar4d...E5f6', nickname: 'SpinDoctor', winnings: 18.5 },
+      { rank: 3, address: 'Kr7g...H8i9', nickname: 'WallBouncer', winnings: 15.3 },
+    ],
+    '3d': [
+      { rank: 1, address: 'Ne1a...B2c3', nickname: 'PaddleMaster', winnings: 60.1 },
+      { rank: 2, address: 'Ar4d...E5f6', nickname: 'SpinDoctor', winnings: 55.2 },
+      { rank: 3, address: 'Kr7g...H8i9', nickname: 'WallBouncer', winnings: 49.8 },
+    ],
+    '7d': [
+      { rank: 1, address: 'Ar4d...E5f6', nickname: 'SpinDoctor', winnings: 125.6 },
+      { rank: 2, address: 'Ne1a...B2c3', nickname: 'PaddleMaster', winnings: 119.8 },
+      { rank: 3, address: 'Kr7g...H8i9', nickname: 'WallBouncer', winnings: 110.2 },
+    ],
+    '30d': [
+      { rank: 1, address: 'Ar4d...E5f6', nickname: 'SpinDoctor', winnings: 450.3 },
+      { rank: 2, address: 'Ne1a...B2c3', nickname: 'PaddleMaster', winnings: 432.1 },
+      { rank: 3, address: 'Kr7g...H8i9', nickname: 'WallBouncer', winnings: 415.9 },
+    ],
+  },
+  'cosmic-dodge': {
+    '1d': [
+      { rank: 1, address: 'Xe1j...K2l3', nickname: 'StarSkipper', winnings: 19.8 },
+      { rank: 2, address: 'Rn4m...O5p6', nickname: 'VoidDancer', winnings: 16.2 },
+      { rank: 3, address: 'He7q...R8s9', nickname: 'CometChaser', winnings: 13.9 },
+    ],
+    '3d': [
+      { rank: 1, address: 'He7q...R8s9', nickname: 'CometChaser', winnings: 58.3 },
+      { rank: 2, address: 'Xe1j...K2l3', nickname: 'StarSkipper', winnings: 52.1 },
+      { rank: 3, 'address': 'Rn4m...O5p6', nickname: 'VoidDancer', winnings: 47.6 },
+    ],
+    '7d': [
+      { rank: 1, address: 'He7q...R8s9', nickname: 'CometChaser', winnings: 115.4 },
+      { rank: 2, address: 'Xe1j...K2l3', nickname: 'StarSkipper', winnings: 111.9 },
+      { rank: 3, address: 'Rn4m...O5p6', nickname: 'VoidDancer', winnings: 108.2 },
+    ],
+    '30d': [
+      { rank: 1, address: 'He7q...R8s9', nickname: 'CometChaser', winnings: 420.5 },
+      { rank: 2, address: 'Xe1j...K2l3', nickname: 'StarSkipper', winnings: 410.7 },
+      { rank: 3, address: 'Rn4m...O5p6', nickname: 'VoidDancer', winnings: 399.8 },
+    ],
+  },
 };
-
 
 // --- Leaderboard Component ---
 const Leaderboard: React.FC = () => {
-  const [activeFilter, setActiveFilter] = useState<'1d' | '3d' | '7d' | '30d'>('7d');
-  const filters: { key: '1d' | '3d' | '7d' | '30d', label: string }[] = [
+  type GameKey = 'overall' | 'solana-gold-rush' | 'neon-pong' | 'cosmic-dodge';
+  type TimeKey = '1d' | '3d' | '7d' | '30d';
+
+  const [activeGame, setActiveGame] = useState<GameKey>('overall');
+  const [activeTimeFilter, setActiveTimeFilter] = useState<TimeKey>('7d');
+  
+  const gameFilters: { key: GameKey, label: string, color: string }[] = [
+    { key: 'overall', label: 'Overall', color: 'yellow' },
+    { key: 'solana-gold-rush', label: 'Gold Rush', color: 'yellow' },
+    { key: 'neon-pong', label: 'Neon Pong', color: 'blue' },
+    { key: 'cosmic-dodge', label: 'Cosmic Dodge', color: 'pink' },
+  ];
+
+  const timeFilters: { key: TimeKey, label: string }[] = [
     { key: '1d', label: '1 Day' },
     { key: '3d', label: '3 Days' },
     { key: '7d', label: '7 Days' },
     { key: '30d', label: '30 Days' },
   ];
 
-  const data = LEADERBOARD_DATA[activeFilter];
+  const data = LEADERBOARD_DATA[activeGame]?.[activeTimeFilter] ?? [];
 
   return (
     <div className="w-full bg-brand-gray border border-yellow/20 rounded-lg p-6 mt-16 animate-fadeIn">
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-4">
         <h2 className="text-4xl font-extrabold font-display mb-4 sm:mb-0 bg-gradient-to-r from-pink-light via-blue-light to-yellow-light bg-clip-text text-transparent animate-psychedelic-bg bg-[size:400%_400%]">Leaderboard</h2>
         <div className="flex gap-2 bg-brand-dark p-1 rounded-md">
-          {filters.map(({ key, label }) => (
+          {timeFilters.map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => setActiveFilter(key)}
+              onClick={() => setActiveTimeFilter(key)}
               className={`py-2 px-4 rounded-md font-bold text-sm transition-colors duration-200
-                ${activeFilter === key
+                ${activeTimeFilter === key
                   ? 'bg-yellow text-brand-dark'
                   : 'bg-transparent text-gray-400 hover:bg-gray-700 hover:text-white'
                 }`
@@ -178,8 +151,26 @@ const Leaderboard: React.FC = () => {
           ))}
         </div>
       </div>
+      
+      <div className="flex flex-wrap justify-center gap-2 mb-6 bg-brand-dark p-2 rounded-md">
+        {gameFilters.map(({ key, label, color }) => (
+          <button
+            key={key}
+            onClick={() => setActiveGame(key)}
+            className={`py-2 px-4 rounded-md font-bold text-sm transition-colors duration-200
+              ${activeGame === key
+                ? `bg-${color} text-brand-dark`
+                : 'bg-transparent text-gray-400 hover:bg-gray-700 hover:text-white'
+              }`
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-        {data.map((entry, index) => (
+        {data.length > 0 ? data.map((entry, index) => (
           <div
             key={index}
             className="flex items-center justify-between p-3 bg-brand-dark rounded-md border-l-4 border-transparent hover:bg-gray-800 hover:border-yellow transition-all"
@@ -190,7 +181,11 @@ const Leaderboard: React.FC = () => {
             </div>
             <span className="font-bold text-sm sm:text-base bg-gradient-to-r from-pink-light via-blue-light to-yellow-light bg-clip-text text-transparent animate-psychedelic-bg bg-[size:400%_400%]">{entry.winnings.toFixed(2)} SOL</span>
           </div>
-        ))}
+        )) : (
+          <div className="text-center py-8 text-gray-500">
+            No data available for this category.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -227,20 +222,75 @@ const InfoCard = ({ icon, title, children }: InfoCardProps) => (
     </div>
 );
 
+const CollapsibleRule = ({ title, colorTheme, children }: { title: string, colorTheme: 'yellow' | 'blue' | 'pink', children: React.ReactNode }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const colorClasses = {
+    blue: {
+      border: 'border-blue/50',
+      text: 'text-blue-light',
+      hoverBg: 'hover:bg-blue/10',
+    },
+    yellow: {
+      border: 'border-yellow/50',
+      text: 'text-yellow-light',
+      hoverBg: 'hover:bg-yellow/10',
+    },
+    pink: {
+      border: 'border-pink/50',
+      text: 'text-pink-light',
+      hoverBg: 'hover:bg-pink/10',
+    }
+  };
+  const theme = colorClasses[colorTheme];
+
+  return (
+    <div className={`bg-brand-dark border ${theme.border} rounded-lg mb-4`}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full flex justify-between items-center p-4 text-left ${theme.hoverBg} transition-colors duration-200`}
+        aria-expanded={isOpen}
+      >
+        <h3 className={`text-2xl font-bold font-display ${theme.text}`}>{title}</h3>
+        <svg
+          className={`w-6 h-6 transform transition-transform duration-300 text-gray-400 ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+        </svg>
+      </button>
+      <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isOpen ? 'max-h-96' : 'max-h-0'}`}>
+        <div className="p-6 border-t border-gray-700 text-gray-300 leading-relaxed">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 const MainPage: React.FC<MainPageProps> = ({ onSelectGame }) => {
   const colorClasses = {
     blue: {
       border: 'border-blue/20 hover:border-blue/50',
-      shadow: 'hover:shadow-blue/10',
+      shadow: 'hover:shadow-2xl hover:shadow-blue/20',
       text: 'text-blue',
       bg: 'bg-blue group-hover:bg-blue-light',
     },
     yellow: {
       border: 'border-yellow/20 hover:border-yellow/50',
-      shadow: 'hover:shadow-yellow/10',
+      shadow: 'hover:shadow-2xl hover:shadow-yellow/20',
       text: 'text-yellow',
       bg: 'bg-yellow group-hover:bg-yellow-light',
+    },
+    pink: {
+      border: 'border-pink/20 hover:border-pink/50',
+      shadow: 'hover:shadow-2xl hover:shadow-pink/20',
+      text: 'text-pink',
+      bg: 'bg-pink group-hover:bg-pink-light',
     },
   };
 
@@ -256,14 +306,16 @@ const MainPage: React.FC<MainPageProps> = ({ onSelectGame }) => {
         </p>
       </div>
       
-      {/* FIX: Added children to each InfoCard component to satisfy the required 'children' prop. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20 animate-fadeIn" style={{ animationDelay: '200ms' }}>
+        {/* Fix: The InfoCard component expects a 'children' prop. The descriptive paragraph has been nested inside the component to provide it. */}
         <InfoCard icon={<WalletIcon />} title="True Self-Custody">
           <p className="text-gray-400">Your funds never leave your wallet. We never take deposits. All wagers are handled by secure, peer-to-peer transactions directly on the Solana blockchain.</p>
         </InfoCard>
+        {/* Fix: The InfoCard component expects a 'children' prop. The descriptive paragraph has been nested inside the component to provide it. */}
         <InfoCard icon={<LightningIcon />} title="Pure Skill, No Luck">
           <p className="text-gray-400">Victory is determined by your skill, not by chance. Our games are designed to be competitive and fair, rewarding strategy and quick reflexes.</p>
         </InfoCard>
+        {/* Fix: The InfoCard component expects a 'children' prop. The descriptive paragraph has been nested inside the component to provide it. */}
         <InfoCard icon={<RocketIcon />} title="Instant Payouts">
           <p className="text-gray-400">Winnings are sent directly to your wallet the moment you win. No waiting, no withdrawals. Just pure, instant gratification powered by Solana.</p>
         </InfoCard>
@@ -272,18 +324,20 @@ const MainPage: React.FC<MainPageProps> = ({ onSelectGame }) => {
       <h2 className="text-5xl font-extrabold font-display mb-10 text-center bg-gradient-to-r from-pink-light via-blue-light to-yellow-light bg-clip-text text-transparent animate-psychedelic-bg bg-[size:400%_400%]">
         Choose Your Arena
       </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
         {/* Solana Gold Rush Card */}
         <button
           onClick={() => onSelectGame('solana-gold-rush')}
           className={`group bg-brand-gray border rounded-lg p-6 flex flex-col items-center text-center transform transition-all duration-300 hover:-translate-y-2 ${colorClasses.yellow.border} ${colorClasses.yellow.shadow} cursor-pointer w-full`}
           aria-label="Play Gold Rush"
         >
-          <h3 className={`text-3xl font-bold font-display mb-3 ${colorClasses.yellow.text}`}>Gold Rush</h3>
-          <p className="text-gray-400 mb-6 h-12">A 1v1 betting game of wits. Outplay your opponent over five rounds to win the pot.</p>
+          <div className="flex-grow">
+            <h3 className={`text-3xl font-bold font-display mb-3 ${colorClasses.yellow.text}`}>Gold Rush</h3>
+            <p className="text-gray-400">A 1v1 betting game of wits. Outplay your opponent over five rounds to win the pot.</p>
+          </div>
           <div
             aria-hidden="true"
-            className={`mt-auto text-brand-dark font-bold py-2 px-8 rounded-lg text-lg transition-transform transform group-hover:scale-105 shadow-md ${colorClasses.yellow.bg}`}
+            className={`mt-8 text-brand-dark font-bold py-2 px-8 rounded-lg text-lg transition-transform transform group-hover:scale-105 shadow-md ${colorClasses.yellow.bg}`}
           >
             Play Now
           </div>
@@ -295,16 +349,83 @@ const MainPage: React.FC<MainPageProps> = ({ onSelectGame }) => {
           className={`group bg-brand-gray border rounded-lg p-6 flex flex-col items-center text-center transform transition-all duration-300 hover:-translate-y-2 ${colorClasses.blue.border} ${colorClasses.blue.shadow} cursor-pointer w-full`}
           aria-label="Play Neon Pong"
         >
-          <h3 className={`text-3xl font-bold font-display mb-3 ${colorClasses.blue.text}`}>Neon Pong</h3>
-          <p className="text-gray-400 mb-6 h-12">The classic arcade game re-imagined. Wager on your reflexes in a high-stakes duel.</p>
+          <div className="flex-grow">
+            <h3 className={`text-3xl font-bold font-display mb-3 ${colorClasses.blue.text}`}>Neon Pong</h3>
+            <p className="text-gray-400">The classic arcade game re-imagined. Wager on your reflexes in a high-stakes duel.</p>
+          </div>
           <div
             aria-hidden="true"
-            className={`mt-auto text-brand-dark font-bold py-2 px-8 rounded-lg text-lg transition-transform transform group-hover:scale-105 shadow-md ${colorClasses.blue.bg}`}
+            className={`mt-8 text-brand-dark font-bold py-2 px-8 rounded-lg text-lg transition-transform transform group-hover:scale-105 shadow-md ${colorClasses.blue.bg}`}
+          >
+            Play Now
+          </div>
+        </button>
+
+        {/* Cosmic Dodge Card */}
+        <button
+          onClick={() => onSelectGame('cosmic-dodge')}
+          className={`group bg-brand-gray border rounded-lg p-6 flex flex-col items-center text-center transform transition-all duration-300 hover:-translate-y-2 ${colorClasses.pink.border} ${colorClasses.pink.shadow} cursor-pointer w-full`}
+          aria-label="Play Cosmic Dodge"
+        >
+          <div className="flex-grow">
+            <h3 className={`text-3xl font-bold font-display mb-3 ${colorClasses.pink.text}`}>Cosmic Dodge</h3>
+            <p className="text-gray-400">Outlast your opponent in a chaotic "bullet hell" survival duel.</p>
+          </div>
+          <div
+            aria-hidden="true"
+            className={`mt-8 text-brand-dark font-bold py-2 px-8 rounded-lg text-lg transition-transform transform group-hover:scale-105 shadow-md ${colorClasses.pink.bg}`}
           >
             Play Now
           </div>
         </button>
       </div>
+
+      <div className="max-w-3xl mx-auto mt-20 w-full">
+        <h2 className="text-5xl font-extrabold font-display mb-10 text-center bg-gradient-to-r from-pink-light via-blue-light to-yellow-light bg-clip-text text-transparent animate-psychedelic-bg bg-[size:400%_400%]">
+          Game Rules
+        </h2>
+        
+        {/* Fix: The CollapsibleRule component expects a 'children' prop. The game rules have been nested inside the component to provide it. */}
+        <CollapsibleRule title="Gold Rush" colorTheme="yellow">
+          <p>Gold Rush is a game of bidding and bluffing.</p>
+          <ol className="list-decimal list-inside space-y-2 mt-4">
+            <li>The game consists of <strong>5 rounds</strong>.</li>
+            <li>In each round, a random "Round Number" is revealed.</li>
+            <li>Both players have five "Data Chips" valued 1 through 5. You can only use each chip once.</li>
+            <li>Simultaneously, both players choose one of their available chips to play.</li>
+            <li>The player who played the <strong>higher value chip</strong> wins the round.</li>
+            <li>The round winner scores points equal to: <strong>Round Number + Your Chip + Opponent's Chip</strong>.</li>
+            <li>If both players play the same chip, it's a draw and no points are awarded.</li>
+            <li>The player with the most points after 5 rounds wins the entire pot!</li>
+          </ol>
+        </CollapsibleRule>
+
+        {/* Fix: The CollapsibleRule component expects a 'children' prop. The game rules have been nested inside the component to provide it. */}
+        <CollapsibleRule title="Neon Pong" colorTheme="blue">
+           <p>Neon Pong is a classic arcade game with a crypto twist.</p>
+          <ul className="list-disc list-inside space-y-2 mt-4">
+              <li>Use the <strong>W key</strong> to move up and <strong>S key</strong> to move down.</li>
+              <li>The goal is to hit the ball past your opponent's paddle to score a point.</li>
+              <li>The ball's speed increases during each rally.</li>
+              <li>Be the first to score <strong>3 points</strong> to win a round.</li>
+              <li>The first player to win <strong>2 rounds</strong> wins the match and the pot!</li>
+          </ul>
+        </CollapsibleRule>
+        
+        {/* Fix: The CollapsibleRule component expects a 'children' prop. The game rules have been nested inside the component to provide it. */}
+        <CollapsibleRule title="Cosmic Dodge" colorTheme="pink">
+          <p>Cosmic Dodge is a "bullet hell" survival duel where your only goal is to outlast your opponent.</p>
+          <ul className="list-disc list-inside space-y-2 mt-4">
+              <li>Use the <strong>W, A, S, D keys</strong> to control your ship.</li>
+              <li>You and your opponent face identical waves of projectiles in separate arenas.</li>
+              <li>The round ends when a ship is destroyed. The surviving player wins the round.</li>
+              <li>The first player to win <strong>3 rounds</strong> wins the match and the pot!</li>
+              <li>The longer the round goes on, the more intense the patterns become.</li>
+              <li>Stay focused, stay moving, and survive!</li>
+          </ul>
+        </CollapsibleRule>
+      </div>
+
       <Leaderboard />
     </div>
   );

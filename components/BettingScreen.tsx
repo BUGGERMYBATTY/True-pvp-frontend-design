@@ -33,6 +33,7 @@ const BettingScreen: React.FC<BettingScreenProps> = ({
       shadow: 'shadow-blue/20',
       text: 'text-blue',
       border: 'border-blue',
+      ring: 'focus:ring-blue',
     },
     yellow: {
       main: 'yellow',
@@ -40,6 +41,7 @@ const BettingScreen: React.FC<BettingScreenProps> = ({
       shadow: 'shadow-yellow/20',
       text: 'text-yellow',
       border: 'border-yellow',
+      ring: 'focus:ring-yellow',
     },
     pink: {
       main: 'pink',
@@ -47,6 +49,7 @@ const BettingScreen: React.FC<BettingScreenProps> = ({
       shadow: 'shadow-pink/20',
       text: 'text-pink',
       border: 'border-pink',
+      ring: 'focus:ring-pink',
     }
   };
   const theme = colorClasses[colorTheme];
@@ -60,21 +63,25 @@ const BettingScreen: React.FC<BettingScreenProps> = ({
 
       <div className="bg-brand-gray p-6 rounded-lg w-full border border-gray-700">
         <h3 className="text-2xl font-bold text-center mb-6">Place Your Wager (SOL)</h3>
-        <div className="grid grid-cols-5 gap-3 mb-6">
-          {BET_AMOUNTS.map(amount => (
-            <button
-              key={amount}
-              onClick={() => setSelectedAmount(amount)}
-              className={`py-3 px-2 rounded-md font-bold text-lg transition-all duration-200 border-2
-                ${selectedAmount === amount 
-                  ? `bg-${theme.main} text-brand-dark ${theme.border} scale-110` 
-                  : `bg-brand-dark text-white border-gray-600 hover:${theme.border}`
-                }`
-              }
-            >
-              {amount.toFixed(2)}
-            </button>
-          ))}
+        
+        <div className="relative mb-6">
+          <select
+            value={selectedAmount}
+            onChange={(e) => setSelectedAmount(Number(e.target.value))}
+            className={`w-full appearance-none bg-brand-dark border-2 border-gray-600 rounded-md py-3 px-4 text-white text-center text-lg font-bold focus:outline-none focus:ring-2 ${theme.ring} transition-colors`}
+            aria-label="Select wager amount"
+          >
+            {BET_AMOUNTS.map(amount => (
+              <option key={amount} value={amount} className="font-bold bg-brand-dark text-white">
+                {amount.toFixed(3)} SOL
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
+              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+              </svg>
+          </div>
         </div>
         
         <div className="text-center text-gray-400 mb-4">

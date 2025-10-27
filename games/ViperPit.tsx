@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Screen, BET_AMOUNTS } from '../types.ts';
 import BettingScreen from '../components/BettingScreen.tsx';
+import MatchingScreen from '../components/MatchingScreen.tsx';
 import ViperPitGameScreen from '../components/ViperPitGameScreen.tsx';
 import WinnerScreen from '../components/WinnerScreen.tsx';
 import HowToPlayModal from '../components/HowToPlayModal.tsx';
@@ -9,122 +10,115 @@ const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://loca
 
 interface ViperPitProps {
   walletAddress: string;
-  walletConnected: boolean;
+  nickname: string;
   balance: number;
   onExitGame: () => void;
-  onBalanceUpdate: (amount: number) => void;
-  // FIX: Updated prop type to match the implementation in App.tsx.
   onRequestMatch: (gameId: string, betAmount: number) => Promise<{ matched: boolean; gameId: string | null } | null>;
   onCancelMatch: (gameId: string, betAmount: number) => void;
+  refetchBalance: () => void;
+  provider: any;
+  connection: any;
+  isDemoMode: boolean;
 }
 
 const ViperPit: React.FC<ViperPitProps> = ({
   walletAddress,
-  walletConnected,
+  nickname,
   balance,
   onExitGame,
-  onBalanceUpdate,
   onRequestMatch,
   onCancelMatch,
+  refetchBalance,
 }) => {
   const [screen, setScreen] = useState<Screen>(Screen.Betting);
   const [betAmount, setBetAmount] = useState<number>(BET_AMOUNTS[0]);
-  const [gameWinnerId, setGameWinnerId] = useState<number | null>(null);
+  const [gameResult, setGameResult] = useState<{ winnerId: number | null, forfeited: boolean }>({ winnerId: null, forfeited: false });
   const [showHowToPlay, setShowHowToPlay] = useState(false);
-  const [forfeited, setForfeited] = useState(false);
+  const [gameId, setGameId] = useState<string | null>(null);
+  const walletConnected = !!walletAddress;
 
-    // Effect to handle the actual match request after the UI has updated
-  useEffect(() => {
-    const performMatchRequest = async () => {
-      const matchResult = await onRequestMatch('viper-pit', betAmount);
-      // FIX: Correctly handle the object returned from onRequestMatch.
-      if (matchResult?.matched) {
-        setScreen(Screen.Game); // Instantly matched
-      } else if (matchResult === null) {
-        // Request failed, go back to betting screen
-        setScreen(Screen.Betting);
-      }
-      // If matchResult.matched is false, we stay on the Matching screen and wait for the polling effect.
-    };
-
-    if (screen === Screen.Matching) {
-      performMatchRequest();
+  const handleFindOpponent = useCallback(async (amount: number) => {
+    if (!walletConnected || balance < amount) return;
+    setBetAmount(amount);
+    setScreen(Screen.Matching);
+    const matchResult = await onRequestMatch('cosmic-dodge', amount);
+    if (matchResult?.matched && matchResult.gameId) {
+      setGameId(matchResult.gameId);
+      setScreen(Screen.Game);
+    } else if (matchResult === null) {
+      setScreen(Screen.Betting);
     }
-  }, [screen, betAmount, onRequestMatch]);
+  }, [walletConnected, balance, onRequestMatch]);
 
-  // Polling effect to check for a match
   useEffect(() => {
-    if (screen !== Screen.Matching) return;
+    if (screen !== Screen.Matching || gameId) return;
     const intervalId = setInterval(async () => {
       try {
-        // FIX: Corrected the polling URL to match the server's endpoint.
         const response = await fetch(`${API_BASE_URL}/api/matchmaking/status/${walletAddress}`);
         const data = await response.json();
-        if (data.status === 'matched') {
+        if (data.status === 'matched' && data.gameId) {
           clearInterval(intervalId);
+          setGameId(data.gameId);
           setScreen(Screen.Game);
         }
       } catch (error) { console.error("Error polling for match status:", error); }
     }, 2000);
     return () => clearInterval(intervalId);
-  }, [screen, betAmount, walletAddress]);
-
-  // UX FIX: This now provides immediate feedback by changing the screen first.
-  const handleFindOpponent = useCallback((amount: number) => {
-    if (!walletConnected || balance < amount) return;
-    setBetAmount(amount);
-    setScreen(Screen.Matching); // Go to matching screen immediately
-  }, [walletConnected, balance]);
-
-  const handleGameOver = useCallback((winnerId: number | null) => {
-    setForfeited(false);
-    setGameWinnerId(winnerId);
-    if (winnerId === 1) {
-      const totalPot = betAmount * 2;
-      const siteFee = totalPot * 0.015;
-      onBalanceUpdate((totalPot - siteFee) - betAmount);
-    } else if (winnerId === 2) {
-      onBalanceUpdate(-betAmount);
-    }
+  }, [screen, walletAddress, gameId]);
+  
+  const handleGameOver = useCallback((winnerId: number | null, forfeited = false) => {
+    setGameResult({ winnerId, forfeited });
     setScreen(Screen.Winner);
-  }, [betAmount, onBalanceUpdate]);
+    refetchBalance();
+  }, [refetchBalance]);
 
   const handlePlayAgain = useCallback(() => {
-    setGameWinnerId(null);
-    setForfeited(false);
+    setGameResult({ winnerId: null, forfeited: false });
+    setGameId(null);
     setScreen(Screen.Betting);
   }, []);
+  
+  const handleExit = useCallback(() => {
+    refetchBalance();
+    onExitGame();
+  }, [refetchBalance, onExitGame]);
 
   const handleCancelSearch = useCallback(() => {
-    onCancelMatch('viper-pit', betAmount);
+    onCancelMatch('cosmic-dodge', betAmount);
     setScreen(Screen.Betting);
   }, [betAmount, onCancelMatch]);
-  
-  const handleForfeit = useCallback(() => {
-    if (window.confirm("Are you sure you want to forfeit? You will lose your wager.")) {
-        onBalanceUpdate(-betAmount);
-        setGameWinnerId(2);
-        setForfeited(true);
-        setScreen(Screen.Winner);
-    }
-  }, [onBalanceUpdate, betAmount]);
 
   const renderScreen = () => {
     switch (screen) {
       case Screen.Matching:
         return (
-          <div className="flex flex-col items-center justify-center h-full animate-fadeIn text-center">
-            <h2 className="text-3xl font-bold font-display text-pink mb-4">Finding Opponent...</h2>
-            <p className="text-white mb-8">Wagering {betAmount} SOL</p>
-            <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-pink"></div>
-            <p className="text-gray-400 mt-8 max-w-sm">You have been added to the player pool. The game will begin as soon as another player selects the same wager.</p>
-            <button onClick={handleCancelSearch} className="mt-6 bg-pink/80 text-white font-bold py-2 px-6 rounded-lg hover:bg-pink transition-colors">Cancel Search</button>
-          </div>
+          <MatchingScreen
+            betAmount={betAmount}
+            onCancelSearch={handleCancelSearch}
+            colorTheme="pink"
+          />
         );
       case Screen.Game:
-        return <ViperPitGameScreen onGameOver={handleGameOver} betAmount={betAmount} onForfeit={handleForfeit} />;
+        if (!gameId) return <div className="text-center text-xl text-red-500">Error: No Game ID. Please return to lobby.</div>;
+        return (
+          <ViperPitGameScreen 
+            onGameOver={handleGameOver} 
+            betAmount={betAmount}
+            gameId={gameId}
+            walletAddress={walletAddress}
+            nickname={nickname}
+          />
+        );
       case Screen.Winner:
-        return <WinnerScreen winnerId={gameWinnerId} betAmount={betAmount} onPlayAgain={handlePlayAgain} onExitGame={onExitGame} forfeited={forfeited} />;
+        return (
+          <WinnerScreen 
+            winnerId={gameResult.winnerId} 
+            betAmount={betAmount} 
+            onPlayAgain={handlePlayAgain} 
+            onExitGame={handleExit} 
+            forfeited={gameResult.forfeited} 
+          />
+        );
       default:
         return <BettingScreen onFindOpponent={handleFindOpponent} walletConnected={walletConnected} balance={balance} onExitGame={onExitGame} onShowHowToPlay={() => setShowHowToPlay(true)} gameName="Cosmic Dodge" colorTheme="pink" />;
     }

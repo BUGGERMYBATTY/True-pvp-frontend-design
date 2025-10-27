@@ -29,7 +29,6 @@ const WinnerScreen: React.FC<WinnerScreenProps> = ({ winnerId, betAmount, onPlay
     emoji = '🤝';
   } else if (isPlayerWinner) {
     title = 'You Won!';
-    // FEE FIX: Updated text to reflect new fee logic
     subtext = `You won the pot of ${totalPot.toFixed(4)} SOL! Your winnings have been sent to your wallet.`;
     emoji = '🏆';
     titleColor = 'text-yellow';
